@@ -44,3 +44,6 @@ Figma UX Version Local Copy/
 
 # PRD prototype images remain local
 image*.png
+
+# Project-local development SDKs
+.tools/
