@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+.env
+.venv
+env/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# uv
+.uv/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local agent and browser scratch
+.superpowers/
+.worktrees/
+.playwright-mcp/
+.claude/settings.local.json
+debug.log
+
+# Local design backups are delivery artifacts, not source
+Figma UX Version Local Copy/
+
+# PRD prototype images remain local
+image*.png
