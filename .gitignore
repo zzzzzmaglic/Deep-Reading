@@ -45,5 +45,9 @@ Figma UX Version Local Copy/
 # PRD prototype images remain local
 image*.png
 
+# Generated iOS template images remain local in this repository.
+app/ios/Runner/Assets.xcassets/AppIcon.appiconset/*.png
+app/ios/Runner/Assets.xcassets/LaunchImage.imageset/*.png
+
 # Project-local development SDKs
 .tools/
