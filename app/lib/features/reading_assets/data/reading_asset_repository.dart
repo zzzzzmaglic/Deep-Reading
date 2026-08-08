@@ -37,10 +37,26 @@ abstract interface class ReadingAssetRepository {
   Future<List<Tag>> readTags();
 }
 
-class SupabaseReadingAssetRepository implements ReadingAssetRepository {
-  SupabaseReadingAssetRepository(this._client);
+abstract interface class ReadingAssetRemoteDataSource {
+  Future<dynamic> callRpc(
+    String functionName, {
+    required Map<String, dynamic> parameters,
+  });
 
-  final SupabaseClient _client;
+  Future<List<Map<String, dynamic>>> readRows(String table);
+}
+
+class SupabaseReadingAssetRepository implements ReadingAssetRepository {
+  SupabaseReadingAssetRepository(SupabaseClient client)
+    : this._(_SupabaseReadingAssetRemoteDataSource(client));
+
+  SupabaseReadingAssetRepository.forDataSource(
+    ReadingAssetRemoteDataSource dataSource,
+  ) : this._(dataSource);
+
+  SupabaseReadingAssetRepository._(this._dataSource);
+
+  final ReadingAssetRemoteDataSource _dataSource;
 
   @override
   Future<ReadingAsset> createHighlightAsset({
@@ -53,9 +69,9 @@ class SupabaseReadingAssetRepository implements ReadingAssetRepository {
     required String contentChecksum,
   }) async {
     final assetId =
-        await _client.rpc(
+        await _dataSource.callRpc(
               'create_highlight_asset',
-              params: {
+              parameters: {
                 'p_article_id': articleId,
                 'p_start_block_id': startBlockId,
                 'p_end_block_id': endBlockId,
@@ -75,9 +91,9 @@ class SupabaseReadingAssetRepository implements ReadingAssetRepository {
     required String noteContent,
   }) async {
     final assetId =
-        await _client.rpc(
+        await _dataSource.callRpc(
               'create_standalone_note',
-              params: {'p_note_content': noteContent},
+              parameters: {'p_note_content': noteContent},
             )
             as String;
 
@@ -90,9 +106,12 @@ class SupabaseReadingAssetRepository implements ReadingAssetRepository {
     required String? noteContent,
   }) async {
     final updatedAssetId =
-        await _client.rpc(
+        await _dataSource.callRpc(
               'update_reading_asset',
-              params: {'p_asset_id': assetId, 'p_note_content': noteContent},
+              parameters: {
+                'p_asset_id': assetId,
+                'p_note_content': noteContent,
+              },
             )
             as String;
 
@@ -104,15 +123,18 @@ class SupabaseReadingAssetRepository implements ReadingAssetRepository {
     required String assetId,
     required List<String> tagIds,
   }) {
-    return _client.rpc(
+    return _dataSource.callRpc(
       'set_asset_tags',
-      params: {'p_asset_id': assetId, 'p_tag_ids': tagIds},
+      parameters: {'p_asset_id': assetId, 'p_tag_ids': tagIds},
     );
   }
 
   @override
   Future<void> deleteReadingAsset(String assetId) {
-    return _client.rpc('delete_reading_asset', params: {'p_asset_id': assetId});
+    return _dataSource.callRpc(
+      'delete_reading_asset',
+      parameters: {'p_asset_id': assetId},
+    );
   }
 
   @override
@@ -121,9 +143,9 @@ class SupabaseReadingAssetRepository implements ReadingAssetRepository {
     required String? blockId,
     required int utf16Offset,
   }) {
-    return _client.rpc(
+    return _dataSource.callRpc(
       'upsert_reading_progress',
-      params: {
+      parameters: {
         'p_article_id': articleId,
         'p_block_id': blockId,
         'p_utf16_offset': utf16Offset,
@@ -133,10 +155,10 @@ class SupabaseReadingAssetRepository implements ReadingAssetRepository {
 
   @override
   Future<List<ReadingAsset>> readAssets({String? articleId}) async {
-    final assetRows = _mapRows(await _client.from('reading_assets').select());
-    final anchorRows = _mapRows(await _client.from('asset_anchors').select());
-    final tagRows = _mapRows(await _client.from('tags').select());
-    final assetTagRows = _mapRows(await _client.from('asset_tags').select());
+    final assetRows = await _dataSource.readRows('reading_assets');
+    final anchorRows = await _dataSource.readRows('asset_anchors');
+    final tagRows = await _dataSource.readRows('tags');
+    final assetTagRows = await _dataSource.readRows('asset_tags');
 
     final anchorsByAssetId = {
       for (final row in anchorRows)
@@ -169,7 +191,7 @@ class SupabaseReadingAssetRepository implements ReadingAssetRepository {
 
   @override
   Future<List<Tag>> readTags() async {
-    final rows = _mapRows(await _client.from('tags').select());
+    final rows = await _dataSource.readRows('tags');
     return rows.map(_tagFromJson).toList(growable: false);
   }
 
@@ -179,12 +201,6 @@ class SupabaseReadingAssetRepository implements ReadingAssetRepository {
       (asset) => asset.id == assetId,
       orElse: () => throw StateError('RPC returned an unreadable asset.'),
     );
-  }
-
-  List<Map<String, dynamic>> _mapRows(dynamic response) {
-    return (response as List<dynamic>)
-        .map((row) => Map<String, dynamic>.from(row as Map))
-        .toList(growable: false);
   }
 
   TextAnchor _anchorFromJson(Map<String, dynamic> json) {
@@ -222,5 +238,28 @@ class SupabaseReadingAssetRepository implements ReadingAssetRepository {
       noteContent: json['note_content'] as String?,
       tags: List.unmodifiable(tags),
     );
+  }
+}
+
+class _SupabaseReadingAssetRemoteDataSource
+    implements ReadingAssetRemoteDataSource {
+  _SupabaseReadingAssetRemoteDataSource(this._client);
+
+  final SupabaseClient _client;
+
+  @override
+  Future<dynamic> callRpc(
+    String functionName, {
+    required Map<String, dynamic> parameters,
+  }) {
+    return _client.rpc(functionName, params: parameters);
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> readRows(String table) async {
+    final response = await _client.from(table).select();
+    return (response as List<dynamic>)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList(growable: false);
   }
 }
