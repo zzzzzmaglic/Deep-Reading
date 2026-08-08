@@ -10,19 +10,32 @@ void main() {
   testWidgets('reader route preserves an anchor in its route context', (
     tester,
   ) async {
+    ReaderRouteContext? receivedContext;
+    String? receivedArticleId;
+    final router = createAppRouter(
+      initialLocation: '/reader/a-1',
+      initialExtra: const ReaderRouteContext(
+        origin: ReaderOrigin.feed,
+        anchorId: 'anchor-1',
+      ),
+      readerScreenBuilder: ({required articleId, required routeContext}) {
+        receivedArticleId = articleId;
+        receivedContext = routeContext;
+        return const SizedBox(key: Key('reader-route'));
+      },
+    );
     await tester.pumpWidget(
       ProviderScope(
         overrides: [_completedAnonymousBootstrapOverride],
-        child: DeepReadingApp.routerForTest(
-          '/reader/a-1',
-          anchorId: 'anchor-1',
-        ),
+        child: DeepReadingApp(router: router),
       ),
     );
 
     await tester.pump();
 
-    expect(find.byKey(const Key('reader-anchor-anchor-1')), findsOneWidget);
+    expect(find.byKey(const Key('reader-route')), findsOneWidget);
+    expect(receivedArticleId, 'a-1');
+    expect(receivedContext?.anchorId, 'anchor-1');
   });
 
   test('reader route context records its origin and optional anchor', () {

@@ -26,7 +26,7 @@ class ReaderStyleSheet extends StatelessWidget {
     this.themeMode = ReaderThemeMode.system,
     this.onThemeModeChanged,
     super.key,
-  }) : fontIndex = fontIndex ?? fontSizeIndex ?? ReaderFontSize.defaultSize.index;
+  }) : fontIndex = fontIndex ?? fontSizeIndex ?? 2;
 
   final int fontIndex;
   final ValueChanged<int>? onFontIndexChanged;
@@ -35,8 +35,7 @@ class ReaderStyleSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final boundedIndex =
-        fontIndex.clamp(0, ReaderFontSize.values.length - 1) as int;
+    final boundedIndex = fontIndex.clamp(0, ReaderFontSize.values.length - 1);
     return SafeArea(
       child: ListView(
         shrinkWrap: true,
@@ -73,18 +72,24 @@ class ReaderStyleSheet extends StatelessWidget {
           ),
           const Divider(height: 20),
           const Text('主题', style: TextStyle(fontWeight: FontWeight.w600)),
-          for (final mode in ReaderThemeMode.values)
-            RadioListTile<ReaderThemeMode>(
-              contentPadding: EdgeInsets.zero,
-              title: Text(_themeLabel(mode)),
-              value: mode,
-              groupValue: themeMode,
-              onChanged: (value) {
-                if (value != null) {
-                  onThemeModeChanged?.call(value);
-                }
-              },
+          RadioGroup<ReaderThemeMode>(
+            groupValue: themeMode,
+            onChanged: (value) {
+              if (value != null) {
+                onThemeModeChanged?.call(value);
+              }
+            },
+            child: Column(
+              children: [
+                for (final mode in ReaderThemeMode.values)
+                  RadioListTile<ReaderThemeMode>(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(_themeLabel(mode)),
+                    value: mode,
+                  ),
+              ],
             ),
+          ),
         ],
       ),
     );

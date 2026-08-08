@@ -4,6 +4,12 @@ import 'package:go_router/go_router.dart';
 
 enum ReaderOrigin { feed, knowledge }
 
+typedef ReaderScreenBuilder =
+    Widget Function({
+      required String articleId,
+      required ReaderRouteContext routeContext,
+    });
+
 class ReaderRouteContext {
   const ReaderRouteContext({required this.origin, this.anchorId});
 
@@ -47,7 +53,11 @@ void replaceTagDetailWithReader(
   );
 }
 
-GoRouter createAppRouter({String initialLocation = '/', Object? initialExtra}) {
+GoRouter createAppRouter({
+  String initialLocation = '/',
+  Object? initialExtra,
+  ReaderScreenBuilder? readerScreenBuilder,
+}) {
   return GoRouter(
     initialLocation: initialLocation,
     initialExtra: initialExtra,
@@ -68,10 +78,14 @@ GoRouter createAppRouter({String initialLocation = '/', Object? initialExtra}) {
         path: '/reader/:articleId',
         builder: (context, state) {
           final routeContext = ReaderRouteContext.fromRouteExtra(state.extra);
-          return ReaderScreen(
-            articleId: state.pathParameters['articleId']!,
-            routeContext: routeContext,
-          );
+          return readerScreenBuilder?.call(
+                articleId: state.pathParameters['articleId']!,
+                routeContext: routeContext,
+              ) ??
+              ReaderScreen(
+                articleId: state.pathParameters['articleId']!,
+                routeContext: routeContext,
+              );
         },
       ),
       GoRoute(

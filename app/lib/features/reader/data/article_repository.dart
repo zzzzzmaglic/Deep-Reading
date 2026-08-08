@@ -48,25 +48,3 @@ class SupabaseArticleRepository implements ArticleRepository {
     return _repository.readArticle(articleId);
   }
 }
-
-class DemoArticleRepository implements ArticleRepository {
-  const DemoArticleRepository();
-
-  @override
-  Future<Article> readArticle(String articleId) async {
-    return Article(
-      id: articleId,
-      title: 'Deep Reading',
-      sourceName: 'Deep Reading',
-      contentChecksum: 'demo',
-      blocks: [
-        ArticleBlock(
-          id: '$articleId-block-1',
-          articleId: articleId,
-          position: 1,
-          content: 'Begin reading to leave a trace worth returning to.',
-        ),
-      ],
-    );
-  }
-}

@@ -8,6 +8,7 @@ import 'package:app/features/reader/presentation/reader_controller.dart';
 import 'package:app/features/reader/presentation/reader_style_sheet.dart';
 import 'package:app/features/reading_assets/data/reading_asset_repository.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 export 'reader_style_sheet.dart';
@@ -20,7 +21,7 @@ class ReaderScreen extends StatefulWidget {
     this.readingAssetRepository,
     this.preferenceStore,
     this.progressReader,
-    this.isOnline,
+    this.connectivity,
     super.key,
   });
 
@@ -30,7 +31,7 @@ class ReaderScreen extends StatefulWidget {
   final ReadingAssetRepository? readingAssetRepository;
   final PreferenceStore? preferenceStore;
   final Future<ProgressPosition?> Function(String articleId)? progressReader;
-  final bool Function()? isOnline;
+  final ReaderConnectivityPort? connectivity;
 
   @override
   State<ReaderScreen> createState() => _ReaderScreenState();
@@ -38,29 +39,29 @@ class ReaderScreen extends StatefulWidget {
 
 class _ReaderScreenState extends State<ReaderScreen> {
   final ScrollController _scrollController = ScrollController();
-  final GlobalKey _anchorKey = GlobalKey();
+  final GlobalKey _viewportKey = GlobalKey();
+  final Map<String, GlobalKey> _blockKeys = <String, GlobalKey>{};
 
   Article? _article;
   ReaderController? _readerController;
   Object? _loadError;
+  String? _anchorError;
+  ProgressPosition? _initialPosition;
+  String? _routeAnchorId;
   bool _controlsVisible = true;
   ReaderFontSize _fontSize = ReaderFontSize.defaultSize;
   ReaderThemeMode _themeMode = ReaderThemeMode.system;
-  String? _anchorBlockId;
 
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_recordApproximateProgress);
     unawaited(_loadPreferences());
     unawaited(_loadArticle());
   }
 
   @override
   void dispose() {
-    _scrollController
-      ..removeListener(_recordApproximateProgress)
-      ..dispose();
+    _scrollController.dispose();
     _readerController?.dispose();
     super.dispose();
   }
@@ -82,7 +83,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
           ? const Color(0xfffffcf7)
           : const Color(0xff171717),
     );
-
     return Theme(
       data: theme,
       child: Scaffold(
@@ -90,25 +90,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
           fit: StackFit.expand,
           children: [
             _buildContent(context),
-            Positioned.fill(
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        theme.scaffoldBackgroundColor.withValues(alpha: 0.72),
-                        Colors.transparent,
-                        Colors.transparent,
-                        theme.scaffoldBackgroundColor.withValues(alpha: 0.8),
-                      ],
-                      stops: const [0, 0.13, 0.82, 1],
-                    ),
-                  ),
-                ),
-              ),
-            ),
             _buildToolbar(context),
             if (_readerController?.hasProgressError ?? false)
               _buildProgressError(context),
@@ -120,77 +101,108 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   Widget _buildContent(BuildContext context) {
     final article = _article;
-    final anchorId = widget.routeContext.anchorId;
     if (article == null) {
       if (_loadError != null) {
         return Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('文章暂时无法打开：$_loadError'),
+              const Text('Unable to load this article.'),
+              const SizedBox(height: 8),
+              Text(_loadError.toString(), textAlign: TextAlign.center),
               const SizedBox(height: 12),
-              TextButton(onPressed: _loadArticle, child: const Text('重试')),
-              if (anchorId != null)
-                SizedBox(key: Key('reader-anchor-$anchorId')),
+              TextButton(
+                key: const Key('reader-article-retry'),
+                onPressed: _loadArticle,
+                child: const Text('Retry'),
+              ),
             ],
           ),
         );
       }
-      return Center(
-        child: anchorId == null
-            ? const CircularProgressIndicator()
-            : SizedBox(key: Key('reader-anchor-$anchorId')),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => setState(() => _controlsVisible = !_controlsVisible),
-      child: NotificationListener<UserScrollNotification>(
-        onNotification: (notification) {
-          if (notification.direction == ScrollDirection.forward &&
-              !_controlsVisible) {
-            setState(() => _controlsVisible = true);
-          } else if (notification.direction == ScrollDirection.reverse &&
-              _controlsVisible) {
-            setState(() => _controlsVisible = false);
-          }
-          return false;
-        },
-        child: CustomScrollView(
-          controller: _scrollController,
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.only(
-                top: 84,
-                left: 20,
-                right: 20,
-                bottom: 112,
-              ),
-              sliver: SliverList.builder(
-                itemCount: article.blocks.length,
-                itemBuilder: (context, index) {
-                  final block = article.blocks[index];
-                  final isAnchor = block.id == _anchorBlockId;
-                  return KeyedSubtree(
-                    key: Key('reader-block-${block.id}'),
-                    child: Padding(
-                      key: isAnchor ? _anchorKey : null,
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Text(
-                        block.content,
-                        style: TextStyle(
-                          fontSize: _fontSize.points,
-                          height: 1.45,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
+    return NotificationListener<UserScrollNotification>(
+      onNotification: (notification) {
+        if (notification.direction == ScrollDirection.forward &&
+            !_controlsVisible) {
+          setState(() => _controlsVisible = true);
+        } else if (notification.direction == ScrollDirection.reverse &&
+            _controlsVisible) {
+          setState(() => _controlsVisible = false);
+        }
+        return false;
+      },
+      child: CustomScrollView(
+        key: _viewportKey,
+        controller: _scrollController,
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.only(
+              top: 84,
+              left: 20,
+              right: 20,
+              bottom: 112,
             ),
-          ],
+            sliver: SliverList.builder(
+              itemCount: article.blocks.length,
+              itemBuilder: (context, index) {
+                final block = article.blocks[index];
+                final content = Padding(
+                  key: _blockKeys[block.id],
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    block.content,
+                    style: TextStyle(
+                      fontSize: _fontSize.points,
+                      height: 1.45,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                );
+                final isRouteAnchor = block.id == _routeAnchorBlockId;
+                return KeyedSubtree(
+                  key: Key('reader-block-${block.id}'),
+                  child: isRouteAnchor
+                      ? KeyedSubtree(
+                          key: Key('reader-anchor-${_routeAnchorId!}'),
+                          child: content,
+                        )
+                      : content,
+                );
+              },
+            ),
+          ),
+          if (_anchorError != null)
+            SliverToBoxAdapter(child: _buildAnchorError(context)),
+        ],
+      ),
+    );
+  }
+
+  String? get _routeAnchorBlockId {
+    if (_routeAnchorId == null) {
+      return null;
+    }
+    return _initialPosition?.blockId;
+  }
+
+  Widget _buildAnchorError(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+      child: Material(
+        color: Theme.of(context).colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(8),
+        child: ListTile(
+          key: const Key('reader-anchor-error'),
+          title: const Text('Requested reading anchor is unavailable.'),
+          trailing: IconButton(
+            key: const Key('reader-anchor-retry'),
+            tooltip: 'Retry',
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadArticle,
+          ),
         ),
       ),
     );
@@ -209,7 +221,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 top: 8,
                 left: 12,
                 child: IconButton(
-                  tooltip: '返回',
+                  tooltip: 'Back',
                   icon: const Icon(Icons.arrow_back),
                   onPressed: () => Navigator.of(context).maybePop(),
                 ),
@@ -219,7 +231,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 left: 16,
                 child: IconButton(
                   key: const Key('reader-style-settings'),
-                  tooltip: '阅读器样式设置',
+                  tooltip: 'Reader style settings',
                   icon: const Icon(Icons.format_size),
                   onPressed: () => _showStyleSheet(context),
                 ),
@@ -241,16 +253,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
         borderRadius: BorderRadius.circular(8),
         child: ListTile(
           dense: true,
-          title: const Text('阅读进度未保存'),
-          subtitle: const Text('网络恢复后可重试。'),
+          title: const Text('Reading progress was not saved.'),
+          subtitle: const Text('Reconnect and retry.'),
           trailing: IconButton(
             key: const Key('retry-progress'),
-            tooltip: '重试',
+            tooltip: 'Retry',
             icon: const Icon(Icons.refresh),
-            onPressed: () {
-              _readerController?.retryProgress();
-              setState(() {});
-            },
+            onPressed: () => _readerController?.retryProgress(),
           ),
         ),
       ),
@@ -258,36 +267,83 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   Future<void> _loadArticle() async {
-    setState(() => _loadError = null);
+    if (mounted) {
+      setState(() {
+        _loadError = null;
+        _anchorError = null;
+        _article = null;
+      });
+    }
     try {
-      final repository = widget.articleRepository ?? _defaultArticleRepository();
+      final repository =
+          widget.articleRepository ?? _defaultArticleRepository();
       final article = await repository.readArticle(widget.articleId);
-      final targetBlockId = await _resolveAnchorBlockId(article);
-      final savedProgress = targetBlockId == null
-          ? await _readSavedProgress(article.id)
-          : null;
+      final anchorRequested = widget.routeContext.anchorId != null;
+      final routeAnchor = await _readRouteAnchor(article);
+      final savedProgress = anchorRequested
+          ? null
+          : await _readSavedProgress(article.id);
       if (!mounted) {
         return;
       }
       _readerController?.dispose();
+      final assetRepository =
+          widget.readingAssetRepository ?? _defaultAssetRepository();
       _readerController = ReaderController(
         articleId: article.id,
-        repository: widget.readingAssetRepository ?? _defaultAssetRepository(),
-        isOnline: widget.isOnline ?? _defaultIsOnline,
+        repository: assetRepository,
+        connectivity: widget.connectivity ?? const SocketReaderConnectivity(),
       )..addListener(_onControllerChanged);
+      _blockKeys
+        ..clear()
+        ..addEntries(
+          article.blocks.map((block) => MapEntry(block.id, GlobalKey())),
+        );
       setState(() {
         _article = article;
-        _anchorBlockId = targetBlockId ??
-            (article.blocks.any((block) => block.id == savedProgress?.blockId)
-                ? savedProgress?.blockId
-                : null);
+        _initialPosition = restoreReaderPosition(
+          routeAnchor: routeAnchor,
+          savedProgress: savedProgress,
+        );
+        _routeAnchorId = routeAnchor == null
+            ? null
+            : widget.routeContext.anchorId;
+        if (anchorRequested && routeAnchor == null) {
+          _anchorError = 'Requested reading anchor is unavailable.';
+        }
       });
-      WidgetsBinding.instance.addPostFrameCallback((_) => _positionAnchor());
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_positionInitialReader());
+      });
     } catch (error) {
       if (mounted) {
         setState(() => _loadError = error);
       }
     }
+  }
+
+  Future<ProgressPosition?> _readRouteAnchor(Article article) async {
+    final anchorId = widget.routeContext.anchorId;
+    if (anchorId == null) {
+      return null;
+    }
+    final repository =
+        widget.readingAssetRepository ?? _defaultAssetRepository();
+    if (repository == null) {
+      return null;
+    }
+    final assets = await repository.readAssets(articleId: article.id);
+    for (final asset in assets) {
+      final anchor = asset.anchor;
+      if (anchor?.id == anchorId &&
+          article.blocks.any((block) => block.id == anchor!.startBlockId)) {
+        return ProgressPosition(
+          blockId: anchor!.startBlockId,
+          utf16Offset: anchor.startUtf16Offset,
+        );
+      }
+    }
+    return null;
   }
 
   Future<ProgressPosition?> _readSavedProgress(String articleId) async {
@@ -302,63 +358,69 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
   }
 
-  Future<String?> _resolveAnchorBlockId(Article article) async {
-    final anchorId = widget.routeContext.anchorId;
-    if (anchorId == null) {
-      return null;
-    }
-    final repository = widget.readingAssetRepository ?? _defaultAssetRepository();
-    if (repository != null) {
-      try {
-        final assets = await repository.readAssets(articleId: article.id);
-        for (final asset in assets) {
-          if (asset.anchor?.id == anchorId) {
-            return asset.anchor!.startBlockId;
-          }
-        }
-      } catch (_) {
-        // A cached article can still be read when the private asset read is unavailable.
-      }
-    }
-    return article.blocks.any((block) => block.id == anchorId)
-        ? anchorId
-        : repository == null
-        ? article.blocks.firstOrNull?.id
-        : null;
-  }
-
-  void _positionAnchor() {
-    if (!mounted || _anchorBlockId == null) {
+  Future<void> _positionInitialReader() async {
+    final position = _initialPosition;
+    if (!mounted || position == null) {
       return;
     }
-    final target = _anchorKey.currentContext;
-    if (target != null) {
-      unawaited(
-        Scrollable.ensureVisible(
-          target,
-          alignment: 0.16,
-          duration: Duration.zero,
-        ),
-      );
-    }
-  }
-
-  void _recordApproximateProgress() {
-    final article = _article;
-    final controller = _readerController;
-    if (article == null || controller == null || article.blocks.isEmpty) {
+    final blockContext = _blockKeys[position.blockId]?.currentContext;
+    if (blockContext == null) {
       return;
     }
-    final index = (_scrollController.offset / 120).floor().clamp(
-      0,
-      article.blocks.length - 1,
+    final textDirection = Directionality.of(context);
+    final textScaler = MediaQuery.textScalerOf(context);
+    final textColor = Theme.of(context).colorScheme.onSurface;
+    final blockRenderObject = blockContext.findRenderObject();
+    await Scrollable.ensureVisible(
+      blockContext,
+      alignment: 0.16,
+      duration: Duration.zero,
     );
-    controller.updateProgress(article.blocks[index].id, 0);
+    if (!mounted) {
+      return;
+    }
+    final blockBox = blockRenderObject as RenderBox?;
+    final viewportBox =
+        _viewportKey.currentContext?.findRenderObject() as RenderBox?;
+    if (blockBox == null || viewportBox == null) {
+      return;
+    }
+    final block = _article!.blocks.firstWhere(
+      (candidate) => candidate.id == position.blockId,
+    );
+    final painter = TextPainter(
+      text: TextSpan(
+        text: block.content,
+        style: TextStyle(
+          fontSize: _fontSize.points,
+          height: 1.45,
+          color: textColor,
+        ),
+      ),
+      textDirection: textDirection,
+      textScaler: textScaler,
+    )..layout(maxWidth: blockBox.size.width);
+    final offset = position.utf16Offset.clamp(0, block.content.length);
+    final caret = painter.getOffsetForCaret(
+      TextPosition(offset: offset),
+      Rect.zero,
+    );
+    final caretGlobal = blockBox.localToGlobal(caret);
+    final desiredGlobal = viewportBox.localToGlobal(
+      Offset(0, viewportBox.size.height * 0.16),
+    );
+    final target = _scrollController.offset + caretGlobal.dy - desiredGlobal.dy;
+    _scrollController.jumpTo(
+      target.clamp(
+        _scrollController.position.minScrollExtent,
+        _scrollController.position.maxScrollExtent,
+      ),
+    );
   }
 
   Future<void> _loadPreferences() async {
-    final store = widget.preferenceStore ?? PreferenceStore();
     try {
+      final store = widget.preferenceStore ?? PreferenceStore();
       final savedFontSize = await store.readReaderFontSize();
       final savedTheme = await store.readReaderTheme();
       if (!mounted) {
@@ -373,7 +435,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
         }
       });
     } catch (_) {
-      // Preferences are non-critical; the frozen defaults remain active.
+      // Preferences are non-critical; defaults remain active.
     }
   }
 
@@ -427,7 +489,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     try {
       return SupabaseArticleRepository(Supabase.instance.client);
     } catch (_) {
-      return const DemoArticleRepository();
+      throw const ReaderArticleUnavailableException();
     }
   }
 
@@ -448,16 +510,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
       return null;
     }
   }
-
-  bool _defaultIsOnline() {
-    try {
-      return Supabase.instance.client.auth.currentSession != null;
-    } catch (_) {
-      return false;
-    }
-  }
 }
 
-extension on Iterable<ArticleBlock> {
-  ArticleBlock? get firstOrNull => isEmpty ? null : first;
+class ReaderArticleUnavailableException implements Exception {
+  const ReaderArticleUnavailableException();
+
+  @override
+  String toString() => 'No article repository is available.';
 }
