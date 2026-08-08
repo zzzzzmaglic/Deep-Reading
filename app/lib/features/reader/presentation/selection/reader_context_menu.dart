@@ -24,24 +24,29 @@ class ReaderContextMenu extends StatelessWidget {
       buttonItems: [
         ContextMenuButtonItem(
           label: '划线',
-          onPressed: () => onAction(ReaderContextAction.highlight),
+          onPressed: () => _invoke(ReaderContextAction.highlight),
         ),
         ContextMenuButtonItem(
           label: '打开阅读资产卡片',
-          onPressed: () => onAction(ReaderContextAction.openAssetCard),
+          onPressed: () => _invoke(ReaderContextAction.openAssetCard),
         ),
         ContextMenuButtonItem(
           label: 'AI释义',
-          onPressed: () => onAction(ReaderContextAction.explainWithAi),
+          onPressed: () => _invoke(ReaderContextAction.explainWithAi),
         ),
         ContextMenuButtonItem(
           label: '拷贝',
           onPressed: () {
             Clipboard.setData(ClipboardData(text: selection.selectedText));
-            onAction(ReaderContextAction.copy);
+            _invoke(ReaderContextAction.copy);
           },
         ),
       ],
     );
+  }
+
+  void _invoke(ReaderContextAction action) {
+    ContextMenuController.removeAny();
+    onAction(action);
   }
 }

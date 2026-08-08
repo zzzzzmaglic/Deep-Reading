@@ -58,19 +58,18 @@ void main() {
     'highlight controller creates an asset and refreshes persisted assets',
     () async {
       final repository = _FakeReadingAssetRepository();
-      final refreshed = <List<ReadingAsset>>[];
       final controller = ReaderSelectionController(
         article: _article,
         repository: repository,
-        onAssetsChanged: (assets) => refreshed.add(assets),
       );
 
-      await controller.highlight(_selection);
+      await controller.createHighlight(_selection);
+      final refreshed = await controller.refreshAssets();
 
       expect(repository.createdAnchors, hasLength(1));
       expect(repository.createdAnchors.single.startBlockId, 'b-1');
       expect(refreshed, hasLength(1));
-      expect(refreshed.single.single.anchor?.selectedText, 'selected text');
+      expect(refreshed.single.anchor?.selectedText, 'Article block');
     },
   );
 }

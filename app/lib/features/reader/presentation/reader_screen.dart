@@ -69,6 +69,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
   ReaderThemeMode _themeMode = ReaderThemeMode.system;
   List<ReadingAsset> _assets = const [];
   ReaderSelection? _selection;
+  ReaderSelectionSession? _selectionSession;
+  ReadingAssetRepository? _assetRepository;
+  Object? _assetsReadError;
+  Object? _highlightError;
+  ReaderSelection? _retryHighlightSelection;
+  bool _retryHighlightRefreshOnly = false;
+  bool _highlightInFlight = false;
 
   @override
   void initState() {
@@ -84,6 +91,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
       ..removeListener(_scheduleViewportProgress)
       ..dispose();
     _readerController?.dispose();
+    _selectionSession?.dispose();
     super.dispose();
   }
 
@@ -112,6 +120,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
           children: [
             _buildContent(context),
             _buildToolbar(context),
+            if (_assetsReadError != null) _buildAssetsReadError(context),
+            if (_highlightError != null) _buildHighlightError(context),
             if (_readerController?.hasProgressError ?? false)
               _buildProgressError(context),
           ],
@@ -144,64 +154,66 @@ class _ReaderScreenState extends State<ReaderScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return widget.selectionAdapter.wrap(
-      article: article,
-      contextMenuBuilder: _buildContextMenu,
-      onSelectionChanged: _onSelectionChanged,
-      child: NotificationListener<ScrollNotification>(
-        onNotification: (notification) {
-          if (notification is UserScrollNotification) {
-            if (notification.direction == ScrollDirection.forward &&
-                !_controlsVisible) {
-              setState(() => _controlsVisible = true);
-            } else if (notification.direction == ScrollDirection.reverse &&
-                _controlsVisible) {
-              setState(() => _controlsVisible = false);
-            }
+    final content = NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification is UserScrollNotification) {
+          if (notification.direction == ScrollDirection.forward &&
+              !_controlsVisible) {
+            setState(() => _controlsVisible = true);
+          } else if (notification.direction == ScrollDirection.reverse &&
+              _controlsVisible) {
+            setState(() => _controlsVisible = false);
           }
-          if (notification is ScrollUpdateNotification ||
-              notification is ScrollEndNotification) {
-            _scheduleViewportProgress();
+        }
+        if (notification is ScrollUpdateNotification ||
+            notification is ScrollEndNotification) {
+          _scheduleViewportProgress();
+        }
+        return false;
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () {
+          if (_selection != null) {
+            return;
           }
-          return false;
+          setState(() => _controlsVisible = !_controlsVisible);
         },
-        child: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTap: () {
-            if (_selection != null) {
-              return;
-            }
-            setState(() => _controlsVisible = !_controlsVisible);
-          },
-          child: CustomScrollView(
-            key: _viewportKey,
-            controller: _scrollController,
-            slivers: [
-              if (_anchorError != null)
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(0, 84, 0, 0),
-                  sliver: SliverToBoxAdapter(child: _buildAnchorError(context)),
-                ),
+        child: CustomScrollView(
+          key: _viewportKey,
+          controller: _scrollController,
+          slivers: [
+            if (_anchorError != null)
               SliverPadding(
-                padding: const EdgeInsets.only(
-                  top: 84,
-                  left: 20,
-                  right: 20,
-                  bottom: 112,
-                ),
-                sliver: SliverToBoxAdapter(
-                  child: Column(
-                    children: article.blocks
-                        .map((block) => _buildBlock(context, block))
-                        .toList(growable: false),
-                  ),
+                padding: const EdgeInsets.fromLTRB(0, 84, 0, 0),
+                sliver: SliverToBoxAdapter(child: _buildAnchorError(context)),
+              ),
+            SliverPadding(
+              padding: const EdgeInsets.only(
+                top: 84,
+                left: 20,
+                right: 20,
+                bottom: 112,
+              ),
+              sliver: SliverToBoxAdapter(
+                child: Column(
+                  children: article.blocks
+                      .map((block) => _buildBlock(context, block))
+                      .toList(growable: false),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
+    final selectionSession = _selectionSession;
+    return selectionSession == null
+        ? content
+        : selectionSession.wrap(
+            contextMenuBuilder: _buildContextMenu,
+            child: content,
+          );
   }
 
   String? get _routeAnchorBlockId {
@@ -218,11 +230,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
       padding: const EdgeInsets.only(bottom: 4),
       child: Text.rich(_buildBlockSpan(context, block, highlightRanges)),
     );
+    final selectableContent =
+        _selectionSession?.wrapBlock(block: block, child: content) ?? content;
     final highlightedContent = highlightRanges.isEmpty
-        ? content
+        ? selectableContent
         : KeyedSubtree(
             key: Key('highlighted-block-${block.id}'),
-            child: content,
+            child: selectableContent,
           );
     final isRouteAnchor = block.id == _routeAnchorBlockId;
     return KeyedSubtree(
@@ -422,6 +436,54 @@ class _ReaderScreenState extends State<ReaderScreen> {
     );
   }
 
+  Widget _buildAssetsReadError(BuildContext context) {
+    return Positioned(
+      left: 16,
+      right: 16,
+      bottom: 76,
+      child: Material(
+        color: Theme.of(context).colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(8),
+        child: ListTile(
+          key: const Key('reader-assets-error'),
+          dense: true,
+          title: const Text('Highlights could not be loaded.'),
+          subtitle: const Text('The article is still available.'),
+          trailing: IconButton(
+            key: const Key('reader-assets-retry'),
+            tooltip: 'Retry',
+            icon: const Icon(Icons.refresh),
+            onPressed: _retryAssetsRead,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHighlightError(BuildContext context) {
+    return Positioned(
+      left: 16,
+      right: 16,
+      bottom: _assetsReadError == null ? 76 : 148,
+      child: Material(
+        color: Theme.of(context).colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(8),
+        child: ListTile(
+          key: const Key('reader-highlight-error'),
+          dense: true,
+          title: const Text('Highlight could not be saved.'),
+          subtitle: const Text('Retry when the connection is available.'),
+          trailing: IconButton(
+            key: const Key('reader-highlight-retry'),
+            tooltip: 'Retry',
+            icon: const Icon(Icons.refresh),
+            onPressed: _highlightInFlight ? null : _retryHighlight,
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _loadArticle() async {
     if (mounted) {
       setState(() {
@@ -437,7 +499,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
       final anchorResolution = await _resolveRouteAnchor(article);
       final assetRepository =
           widget.readingAssetRepository ?? _defaultAssetRepository();
-      final assets = await _readAssets(assetRepository, article.id);
+      final assetRead = await _readAssets(assetRepository, article.id);
       final savedProgress = anchorResolution.wasRequested
           ? null
           : await _readSavedProgress(article.id);
@@ -456,6 +518,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
         ..addEntries(
           article.blocks.map((block) => MapEntry(block.id, GlobalKey())),
         );
+      _selectionSession?.dispose();
+      _selectionSession = widget.selectionAdapter.createSession(
+        article: article,
+        onSelectionChanged: _onSelectionChanged,
+      );
       setState(() {
         _article = article;
         _lastViewportPosition = null;
@@ -467,8 +534,14 @@ class _ReaderScreenState extends State<ReaderScreen> {
             ? null
             : widget.routeContext.anchorId;
         _anchorError = anchorResolution.errorMessage;
-        _assets = assets;
+        _assetRepository = assetRepository;
+        _assets = assetRead.assets;
+        _assetsReadError = assetRead.error;
         _selection = null;
+        _highlightError = null;
+        _retryHighlightSelection = null;
+        _retryHighlightRefreshOnly = false;
+        _highlightInFlight = false;
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
         unawaited(_positionInitialReader());
@@ -480,17 +553,19 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
   }
 
-  Future<List<ReadingAsset>> _readAssets(
+  Future<_AssetRead> _readAssets(
     ReadingAssetRepository? repository,
     String articleId,
   ) async {
     if (repository == null) {
-      return const [];
+      return const _AssetRead.success([]);
     }
     try {
-      return await repository.readAssets(articleId: articleId);
-    } catch (_) {
-      return const [];
+      return _AssetRead.success(
+        await repository.readAssets(articleId: articleId),
+      );
+    } catch (error) {
+      return _AssetRead.failure(error);
     }
   }
 
@@ -503,43 +578,28 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   Widget _buildContextMenu(
     BuildContext context,
-    SelectableRegionState selectableRegionState,
+    ReaderSelection selection,
+    TextSelectionToolbarAnchors anchors,
   ) {
-    final selection = _selection;
-    if (selection == null) {
-      return const SizedBox.shrink();
-    }
     return ReaderContextMenu(
       selection: selection,
-      anchors: selectableRegionState.contextMenuAnchors,
-      onAction: (action) => unawaited(_handleContextAction(action, selection)),
+      anchors: anchors,
+      onAction: (action) => _handleContextAction(action, selection),
     );
   }
 
-  Future<void> _handleContextAction(
+  void _handleContextAction(
     ReaderContextAction action,
     ReaderSelection selection,
-  ) async {
+  ) {
     final article = _article;
     if (article == null) {
       return;
     }
+    _clearSelection();
     switch (action) {
       case ReaderContextAction.highlight:
-        final repository =
-            widget.readingAssetRepository ?? _defaultAssetRepository();
-        if (repository == null) {
-          return;
-        }
-        await ReaderSelectionController(
-          article: article,
-          repository: repository,
-          onAssetsChanged: (assets) {
-            if (mounted) {
-              setState(() => _assets = assets);
-            }
-          },
-        ).highlight(selection);
+        _startHighlight(selection);
       case ReaderContextAction.openAssetCard:
         widget.onOpenAssetCard?.call(
           ReaderAssetCardRequest(articleId: article.id, selection: selection),
@@ -554,6 +614,105 @@ class _ReaderScreenState extends State<ReaderScreen> {
       case ReaderContextAction.copy:
         break;
     }
+  }
+
+  void _clearSelection() {
+    ContextMenuController.removeAny();
+    _selectionSession?.clearSelection();
+    if (mounted && _selection != null) {
+      setState(() => _selection = null);
+    }
+  }
+
+  void _startHighlight(ReaderSelection selection) {
+    if (_highlightInFlight) {
+      return;
+    }
+    unawaited(_submitHighlight(selection));
+  }
+
+  Future<void> _submitHighlight(
+    ReaderSelection selection, {
+    bool refreshOnly = false,
+  }) async {
+    if (_highlightInFlight) {
+      return;
+    }
+    final article = _article;
+    final repository = _assetRepository ?? _defaultAssetRepository();
+    if (article == null || repository == null) {
+      if (mounted) {
+        setState(() {
+          _highlightError = StateError('Highlights are unavailable.');
+          _retryHighlightSelection = selection;
+          _retryHighlightRefreshOnly = refreshOnly;
+        });
+      }
+      return;
+    }
+    if (mounted) {
+      setState(() {
+        _highlightInFlight = true;
+        _highlightError = null;
+      });
+    }
+    var created = refreshOnly;
+    try {
+      final controller = ReaderSelectionController(
+        article: article,
+        repository: repository,
+      );
+      if (!refreshOnly) {
+        await controller.createHighlight(selection);
+        created = true;
+      }
+      final assets = await controller.refreshAssets();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _assets = assets;
+        _highlightError = null;
+        _retryHighlightSelection = null;
+        _retryHighlightRefreshOnly = false;
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _highlightError = error;
+          _retryHighlightSelection = selection;
+          _retryHighlightRefreshOnly = created;
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _highlightInFlight = false);
+      }
+    }
+  }
+
+  Future<void> _retryHighlight() async {
+    final selection = _retryHighlightSelection;
+    if (selection == null) {
+      return;
+    }
+    await _submitHighlight(selection, refreshOnly: _retryHighlightRefreshOnly);
+  }
+
+  Future<void> _retryAssetsRead() async {
+    final article = _article;
+    final repository = _assetRepository;
+    if (article == null || repository == null) {
+      return;
+    }
+    final result = await _readAssets(repository, article.id);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _assets = result.assets;
+      _assetsReadError = result.error;
+    });
   }
 
   void _requestStandaloneNote() {
@@ -895,4 +1054,13 @@ class _AnchorResolution {
   final bool wasRequested;
   final ProgressPosition? position;
   final String? errorMessage;
+}
+
+class _AssetRead {
+  const _AssetRead.success(this.assets) : error = null;
+
+  const _AssetRead.failure(this.error) : assets = const [];
+
+  final List<ReadingAsset> assets;
+  final Object? error;
 }

@@ -11,11 +11,10 @@ class ReaderSelectionPoint {
   final int utf16Offset;
 
   @override
-  bool operator ==(Object other) {
-    return other is ReaderSelectionPoint &&
-        other.blockId == blockId &&
-        other.utf16Offset == utf16Offset;
-  }
+  bool operator ==(Object other) =>
+      other is ReaderSelectionPoint &&
+      other.blockId == blockId &&
+      other.utf16Offset == utf16Offset;
 
   @override
   int get hashCode => Object.hash(blockId, utf16Offset);
@@ -31,6 +30,18 @@ class ReaderSelection {
   final ReaderSelectionPoint start;
   final ReaderSelectionPoint end;
   final String selectedText;
+}
+
+class ReaderBlockSelectionRange {
+  const ReaderBlockSelectionRange({
+    required this.blockId,
+    required this.startUtf16Offset,
+    required this.endUtf16Offset,
+  });
+
+  final String blockId;
+  final int startUtf16Offset;
+  final int endUtf16Offset;
 }
 
 TextAnchor selectionToAnchor(Article article, ReaderSelection selection) {
@@ -55,63 +66,72 @@ TextAnchor selectionToAnchor(Article article, ReaderSelection selection) {
     endBlockId: selection.end.blockId,
     startUtf16Offset: selection.start.utf16Offset,
     endUtf16Offset: selection.end.utf16Offset,
-    selectedText: selection.selectedText,
+    selectedText: _selectionText(
+      article,
+      startIndex: startPosition,
+      startOffset: selection.start.utf16Offset,
+      endIndex: endPosition,
+      endOffset: selection.end.utf16Offset,
+    ),
     contentChecksum: article.contentChecksum,
   );
 }
 
-ReaderSelection? readerSelectionFromPlainText(
+ReaderSelection? readerSelectionFromBlockRanges(
   Article article,
-  String selectedText,
+  Iterable<ReaderBlockSelectionRange> ranges,
 ) {
-  if (selectedText.isEmpty) {
+  final rangedBlocks = <_RangedBlock>[];
+  for (final range in ranges) {
+    final block = _blockById(article, range.blockId);
+    _validateOffset(block, range.startUtf16Offset);
+    _validateOffset(block, range.endUtf16Offset);
+    final startOffset = range.startUtf16Offset < range.endUtf16Offset
+        ? range.startUtf16Offset
+        : range.endUtf16Offset;
+    final endOffset = range.startUtf16Offset < range.endUtf16Offset
+        ? range.endUtf16Offset
+        : range.startUtf16Offset;
+    if (startOffset != endOffset) {
+      rangedBlocks.add(
+        _RangedBlock(
+          block: block,
+          startOffset: startOffset,
+          endOffset: endOffset,
+        ),
+      );
+    }
+  }
+  if (rangedBlocks.isEmpty) {
     return null;
   }
 
-  for (var startIndex = 0; startIndex < article.blocks.length; startIndex++) {
-    final startBlock = article.blocks[startIndex];
-    for (
-      var startOffset = 0;
-      startOffset <= startBlock.content.length;
-      startOffset++
-    ) {
-      for (
-        var endIndex = startIndex;
-        endIndex < article.blocks.length;
-        endIndex++
-      ) {
-        final endBlock = article.blocks[endIndex];
-        final endOffsetStart = endIndex == startIndex ? startOffset + 1 : 0;
-        for (
-          var endOffset = endOffsetStart;
-          endOffset <= endBlock.content.length;
-          endOffset++
-        ) {
-          final candidate = _selectionText(
-            article,
-            startIndex: startIndex,
-            startOffset: startOffset,
-            endIndex: endIndex,
-            endOffset: endOffset,
-          );
-          if (candidate == selectedText) {
-            return ReaderSelection(
-              start: ReaderSelectionPoint(
-                blockId: startBlock.id,
-                utf16Offset: startOffset,
-              ),
-              end: ReaderSelectionPoint(
-                blockId: endBlock.id,
-                utf16Offset: endOffset,
-              ),
-              selectedText: selectedText,
-            );
-          }
-        }
-      }
-    }
-  }
-  return null;
+  rangedBlocks.sort(
+    (a, b) => article.blocks
+        .indexOf(a.block)
+        .compareTo(article.blocks.indexOf(b.block)),
+  );
+  final first = rangedBlocks.first;
+  final last = rangedBlocks.last;
+  final startIndex = article.blocks.indexOf(first.block);
+  final endIndex = article.blocks.indexOf(last.block);
+  return ReaderSelection(
+    start: ReaderSelectionPoint(
+      blockId: first.block.id,
+      utf16Offset: first.startOffset,
+    ),
+    end: ReaderSelectionPoint(
+      blockId: last.block.id,
+      utf16Offset: last.endOffset,
+    ),
+    selectedText: _selectionText(
+      article,
+      startIndex: startIndex,
+      startOffset: first.startOffset,
+      endIndex: endIndex,
+      endOffset: last.endOffset,
+    ),
+  );
 }
 
 String _selectionText(
@@ -145,4 +165,16 @@ void _validateOffset(ArticleBlock block, int offset) {
   if (offset < 0 || offset > block.content.length) {
     throw RangeError.range(offset, 0, block.content.length, 'utf16Offset');
   }
+}
+
+class _RangedBlock {
+  const _RangedBlock({
+    required this.block,
+    required this.startOffset,
+    required this.endOffset,
+  });
+
+  final ArticleBlock block;
+  final int startOffset;
+  final int endOffset;
 }

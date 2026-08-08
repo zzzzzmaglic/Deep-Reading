@@ -2,41 +2,143 @@ import 'package:app/features/reader/domain/article.dart';
 import 'package:app/features/reading_assets/data/reading_asset_repository.dart';
 import 'package:app/features/reading_assets/domain/reading_asset.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import 'selection_to_anchor.dart';
 
 export 'selection_to_anchor.dart';
 
 abstract interface class ReaderSelectionAdapter {
-  Widget wrap({
+  ReaderSelectionSession createSession({
     required Article article,
-    required Widget child,
     required ValueChanged<ReaderSelection?> onSelectionChanged,
-    required SelectableRegionContextMenuBuilder contextMenuBuilder,
   });
+}
+
+typedef ReaderSelectionMenuBuilder =
+    Widget Function(
+      BuildContext context,
+      ReaderSelection selection,
+      TextSelectionToolbarAnchors anchors,
+    );
+
+abstract interface class ReaderSelectionSession {
+  Widget wrap({
+    required Widget child,
+    required ReaderSelectionMenuBuilder contextMenuBuilder,
+  });
+
+  Widget wrapBlock({required ArticleBlock block, required Widget child});
+
+  void clearSelection();
+
+  void dispose();
 }
 
 class FlutterReaderSelectionAdapter implements ReaderSelectionAdapter {
   const FlutterReaderSelectionAdapter();
 
   @override
-  Widget wrap({
+  ReaderSelectionSession createSession({
     required Article article,
-    required Widget child,
     required ValueChanged<ReaderSelection?> onSelectionChanged,
-    required SelectableRegionContextMenuBuilder contextMenuBuilder,
+  }) => _FlutterReaderSelectionSession(
+    article: article,
+    onSelectionChanged: onSelectionChanged,
+  );
+}
+
+class _FlutterReaderSelectionSession implements ReaderSelectionSession {
+  _FlutterReaderSelectionSession({
+    required this.article,
+    required this.onSelectionChanged,
+  }) : _notifiers = {
+         for (final block in article.blocks)
+           block.id: SelectionListenerNotifier(),
+       } {
+    for (final notifier in _notifiers.values) {
+      notifier.addListener(_emitSelection);
+    }
+  }
+
+  final Article article;
+  final ValueChanged<ReaderSelection?> onSelectionChanged;
+  final GlobalKey<SelectionAreaState> _selectionAreaKey =
+      GlobalKey<SelectionAreaState>();
+  final Map<String, SelectionListenerNotifier> _notifiers;
+
+  @override
+  Widget wrap({
+    required Widget child,
+    required ReaderSelectionMenuBuilder contextMenuBuilder,
   }) {
     return SelectionArea(
-      contextMenuBuilder: contextMenuBuilder,
-      onSelectionChanged: (content) {
-        onSelectionChanged(
-          content == null
-              ? null
-              : readerSelectionFromPlainText(article, content.plainText),
+      key: _selectionAreaKey,
+      contextMenuBuilder: (context, selectableRegionState) {
+        final selection = _currentSelection();
+        if (selection == null) {
+          return const SizedBox.shrink();
+        }
+        return contextMenuBuilder(
+          context,
+          selection,
+          selectableRegionState.contextMenuAnchors,
         );
       },
+      onSelectionChanged: (_) => _emitSelection(),
       child: child,
     );
+  }
+
+  @override
+  Widget wrapBlock({required ArticleBlock block, required Widget child}) {
+    final notifier = _notifiers[block.id];
+    return notifier == null
+        ? child
+        : SelectionListener(selectionNotifier: notifier, child: child);
+  }
+
+  @override
+  void clearSelection() {
+    ContextMenuController.removeAny();
+    final state = _selectionAreaKey.currentState;
+    if (state != null) {
+      state.selectableRegion.clearSelection();
+    }
+    onSelectionChanged(null);
+  }
+
+  @override
+  void dispose() {
+    for (final notifier in _notifiers.values) {
+      notifier
+        ..removeListener(_emitSelection)
+        ..dispose();
+    }
+  }
+
+  void _emitSelection() => onSelectionChanged(_currentSelection());
+
+  ReaderSelection? _currentSelection() {
+    final ranges = <ReaderBlockSelectionRange>[];
+    for (final block in article.blocks) {
+      final notifier = _notifiers[block.id]!;
+      if (!notifier.registered ||
+          notifier.selection.status != SelectionStatus.uncollapsed) {
+        continue;
+      }
+      final range = notifier.selection.range;
+      if (range != null) {
+        ranges.add(
+          ReaderBlockSelectionRange(
+            blockId: block.id,
+            startUtf16Offset: range.startOffset,
+            endUtf16Offset: range.endOffset,
+          ),
+        );
+      }
+    }
+    return readerSelectionFromBlockRanges(article, ranges);
   }
 }
 
@@ -44,19 +146,14 @@ abstract interface class IosNativeSelectionAdapter
     implements ReaderSelectionAdapter {}
 
 class ReaderSelectionController {
-  ReaderSelectionController({
-    required this.article,
-    required this.repository,
-    required this.onAssetsChanged,
-  });
+  ReaderSelectionController({required this.article, required this.repository});
 
   final Article article;
   final ReadingAssetRepository repository;
-  final ValueChanged<List<ReadingAsset>> onAssetsChanged;
 
-  Future<void> highlight(ReaderSelection selection) async {
+  Future<ReadingAsset> createHighlight(ReaderSelection selection) async {
     final anchor = selectionToAnchor(article, selection);
-    await repository.createHighlightAsset(
+    return repository.createHighlightAsset(
       articleId: anchor.articleId,
       startBlockId: anchor.startBlockId,
       endBlockId: anchor.endBlockId,
@@ -65,9 +162,10 @@ class ReaderSelectionController {
       selectedText: anchor.selectedText,
       contentChecksum: anchor.contentChecksum,
     );
-    final assets = await repository.readAssets(articleId: article.id);
-    onAssetsChanged(assets);
   }
+
+  Future<List<ReadingAsset>> refreshAssets() =>
+      repository.readAssets(articleId: article.id);
 }
 
 class ReaderAssetCardRequest {

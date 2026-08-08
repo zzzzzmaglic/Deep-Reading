@@ -61,6 +61,75 @@ void main() {
     expect(anchor.endUtf16Offset, 4);
     expect(anchor.contentChecksum, 'checksum-1');
   });
+
+  test('block selection endpoints preserve a later repeated selection', () {
+    final article = _article([
+      const ArticleBlock(
+        id: 'b-1',
+        articleId: 'article-1',
+        position: 1,
+        content: 'same text',
+      ),
+      const ArticleBlock(
+        id: 'b-2',
+        articleId: 'article-1',
+        position: 2,
+        content: 'same text',
+      ),
+    ]);
+
+    final selection = readerSelectionFromBlockRanges(article, const [
+      ReaderBlockSelectionRange(
+        blockId: 'b-2',
+        startUtf16Offset: 0,
+        endUtf16Offset: 4,
+      ),
+    ]);
+    final anchor = selectionToAnchor(article, selection!);
+
+    expect(anchor.startBlockId, 'b-2');
+    expect(anchor.endBlockId, 'b-2');
+    expect(anchor.startUtf16Offset, 0);
+    expect(anchor.endUtf16Offset, 4);
+    expect(anchor.selectedText, 'same');
+  });
+
+  test('block selection ranges preserve cross-block UTF-16 endpoints', () {
+    final article = _article([
+      const ArticleBlock(
+        id: 'b-1',
+        articleId: 'article-1',
+        position: 1,
+        content: 'A😀BC',
+      ),
+      const ArticleBlock(
+        id: 'b-2',
+        articleId: 'article-1',
+        position: 2,
+        content: 'D😀EF',
+      ),
+    ]);
+
+    final selection = readerSelectionFromBlockRanges(article, const [
+      ReaderBlockSelectionRange(
+        blockId: 'b-1',
+        startUtf16Offset: 1,
+        endUtf16Offset: 5,
+      ),
+      ReaderBlockSelectionRange(
+        blockId: 'b-2',
+        startUtf16Offset: 0,
+        endUtf16Offset: 3,
+      ),
+    ]);
+    final anchor = selectionToAnchor(article, selection!);
+
+    expect(anchor.startBlockId, 'b-1');
+    expect(anchor.startUtf16Offset, 1);
+    expect(anchor.endBlockId, 'b-2');
+    expect(anchor.endUtf16Offset, 3);
+    expect(anchor.selectedText, '😀BCD😀');
+  });
 }
 
 Article _article(List<ArticleBlock> blocks) {
