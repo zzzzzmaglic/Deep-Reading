@@ -6,7 +6,10 @@ import 'package:app/features/reader/data/article_repository.dart';
 import 'package:app/features/reader/domain/article.dart';
 import 'package:app/features/reader/presentation/reader_controller.dart';
 import 'package:app/features/reader/presentation/reader_style_sheet.dart';
+import 'package:app/features/reader/presentation/selection/reader_context_menu.dart';
+import 'package:app/features/reader/presentation/selection/reader_selection_adapter.dart';
 import 'package:app/features/reading_assets/data/reading_asset_repository.dart';
+import 'package:app/features/reading_assets/domain/reading_asset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -22,6 +25,10 @@ class ReaderScreen extends StatefulWidget {
     this.preferenceStore,
     this.progressReader,
     this.connectivity,
+    this.selectionAdapter = const FlutterReaderSelectionAdapter(),
+    this.onOpenAssetCard,
+    this.onExplainWithAi,
+    this.onStandaloneNoteRequested,
     this.progressDebounceDuration = const Duration(milliseconds: 350),
     super.key,
   });
@@ -33,6 +40,11 @@ class ReaderScreen extends StatefulWidget {
   final PreferenceStore? preferenceStore;
   final Future<ProgressPosition?> Function(String articleId)? progressReader;
   final ReaderConnectivityPort? connectivity;
+  final ReaderSelectionAdapter selectionAdapter;
+  final ValueChanged<ReaderAssetCardRequest>? onOpenAssetCard;
+  final ValueChanged<ReaderAiExplanationRequest>? onExplainWithAi;
+  final ValueChanged<ReaderStandaloneNoteDraftRequest>?
+  onStandaloneNoteRequested;
   final Duration progressDebounceDuration;
 
   @override
@@ -55,6 +67,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
   bool _controlsVisible = true;
   ReaderFontSize _fontSize = ReaderFontSize.defaultSize;
   ReaderThemeMode _themeMode = ReaderThemeMode.system;
+  List<ReadingAsset> _assets = const [];
+  ReaderSelection? _selection;
 
   @override
   void initState() {
@@ -130,51 +144,61 @@ class _ReaderScreenState extends State<ReaderScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return NotificationListener<ScrollNotification>(
-      onNotification: (notification) {
-        if (notification is UserScrollNotification) {
-          if (notification.direction == ScrollDirection.forward &&
-              !_controlsVisible) {
-            setState(() => _controlsVisible = true);
-          } else if (notification.direction == ScrollDirection.reverse &&
-              _controlsVisible) {
-            setState(() => _controlsVisible = false);
+    return widget.selectionAdapter.wrap(
+      article: article,
+      contextMenuBuilder: _buildContextMenu,
+      onSelectionChanged: _onSelectionChanged,
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          if (notification is UserScrollNotification) {
+            if (notification.direction == ScrollDirection.forward &&
+                !_controlsVisible) {
+              setState(() => _controlsVisible = true);
+            } else if (notification.direction == ScrollDirection.reverse &&
+                _controlsVisible) {
+              setState(() => _controlsVisible = false);
+            }
           }
-        }
-        if (notification is ScrollUpdateNotification ||
-            notification is ScrollEndNotification) {
-          _scheduleViewportProgress();
-        }
-        return false;
-      },
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: () => setState(() => _controlsVisible = !_controlsVisible),
-        child: CustomScrollView(
-          key: _viewportKey,
-          controller: _scrollController,
-          slivers: [
-            if (_anchorError != null)
+          if (notification is ScrollUpdateNotification ||
+              notification is ScrollEndNotification) {
+            _scheduleViewportProgress();
+          }
+          return false;
+        },
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: () {
+            if (_selection != null) {
+              return;
+            }
+            setState(() => _controlsVisible = !_controlsVisible);
+          },
+          child: CustomScrollView(
+            key: _viewportKey,
+            controller: _scrollController,
+            slivers: [
+              if (_anchorError != null)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(0, 84, 0, 0),
+                  sliver: SliverToBoxAdapter(child: _buildAnchorError(context)),
+                ),
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(0, 84, 0, 0),
-                sliver: SliverToBoxAdapter(child: _buildAnchorError(context)),
-              ),
-            SliverPadding(
-              padding: const EdgeInsets.only(
-                top: 84,
-                left: 20,
-                right: 20,
-                bottom: 112,
-              ),
-              sliver: SliverToBoxAdapter(
-                child: Column(
-                  children: article.blocks
-                      .map((block) => _buildBlock(context, block))
-                      .toList(growable: false),
+                padding: const EdgeInsets.only(
+                  top: 84,
+                  left: 20,
+                  right: 20,
+                  bottom: 112,
+                ),
+                sliver: SliverToBoxAdapter(
+                  child: Column(
+                    children: article.blocks
+                        .map((block) => _buildBlock(context, block))
+                        .toList(growable: false),
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -188,28 +212,125 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   Widget _buildBlock(BuildContext context, ArticleBlock block) {
+    final highlightRanges = _highlightRangesFor(block);
     final content = Padding(
       key: _blockKeys[block.id],
       padding: const EdgeInsets.only(bottom: 4),
-      child: Text(
-        block.content,
-        style: TextStyle(
-          fontSize: _fontSize.points,
-          height: 1.45,
-          color: Theme.of(context).colorScheme.onSurface,
-        ),
-      ),
+      child: Text.rich(_buildBlockSpan(context, block, highlightRanges)),
     );
+    final highlightedContent = highlightRanges.isEmpty
+        ? content
+        : KeyedSubtree(
+            key: Key('highlighted-block-${block.id}'),
+            child: content,
+          );
     final isRouteAnchor = block.id == _routeAnchorBlockId;
     return KeyedSubtree(
       key: Key('reader-block-${block.id}'),
       child: isRouteAnchor
           ? KeyedSubtree(
               key: Key('reader-anchor-${_routeAnchorId!}'),
-              child: content,
+              child: highlightedContent,
             )
-          : content,
+          : highlightedContent,
     );
+  }
+
+  TextSpan _buildBlockSpan(
+    BuildContext context,
+    ArticleBlock block,
+    List<_HighlightRange> ranges,
+  ) {
+    final style = TextStyle(
+      fontSize: _fontSize.points,
+      height: 1.45,
+      color: Theme.of(context).colorScheme.onSurface,
+    );
+    if (ranges.isEmpty) {
+      return TextSpan(text: block.content, style: style);
+    }
+    final children = <InlineSpan>[];
+    var cursor = 0;
+    for (final range in ranges) {
+      if (range.start > cursor) {
+        children.add(
+          TextSpan(text: block.content.substring(cursor, range.start)),
+        );
+      }
+      children.add(
+        TextSpan(
+          text: block.content.substring(range.start, range.end),
+          style: style.copyWith(backgroundColor: const Color(0x66FFD54F)),
+        ),
+      );
+      cursor = range.end;
+    }
+    if (cursor < block.content.length) {
+      children.add(TextSpan(text: block.content.substring(cursor)));
+    }
+    return TextSpan(style: style, children: children);
+  }
+
+  List<_HighlightRange> _highlightRangesFor(ArticleBlock block) {
+    final ranges = <_HighlightRange>[];
+    for (final asset in _assets) {
+      final anchor = asset.anchor;
+      if (anchor == null || anchor.articleId != _article?.id) {
+        continue;
+      }
+      if (anchor.startBlockId == block.id && anchor.endBlockId == block.id) {
+        ranges.add(
+          _HighlightRange(anchor.startUtf16Offset, anchor.endUtf16Offset),
+        );
+      } else if (anchor.startBlockId == block.id) {
+        ranges.add(
+          _HighlightRange(anchor.startUtf16Offset, block.content.length),
+        );
+      } else if (anchor.endBlockId == block.id) {
+        ranges.add(_HighlightRange(0, anchor.endUtf16Offset));
+      } else if (_isBlockBetween(block.id, anchor)) {
+        ranges.add(_HighlightRange(0, block.content.length));
+      }
+    }
+    ranges
+      ..removeWhere((range) => range.end <= range.start)
+      ..sort((a, b) => a.start.compareTo(b.start));
+    final merged = <_HighlightRange>[];
+    for (final range in ranges) {
+      final bounded = _HighlightRange(
+        range.start.clamp(0, block.content.length),
+        range.end.clamp(0, block.content.length),
+      );
+      if (merged.isNotEmpty && bounded.start <= merged.last.end) {
+        merged[merged.length - 1] = _HighlightRange(
+          merged.last.start,
+          bounded.end > merged.last.end ? bounded.end : merged.last.end,
+        );
+      } else {
+        merged.add(bounded);
+      }
+    }
+    return merged;
+  }
+
+  bool _isBlockBetween(String blockId, TextAnchor anchor) {
+    final article = _article;
+    if (article == null) {
+      return false;
+    }
+    final blockIndex = article.blocks.indexWhere(
+      (block) => block.id == blockId,
+    );
+    final startIndex = article.blocks.indexWhere(
+      (block) => block.id == anchor.startBlockId,
+    );
+    final endIndex = article.blocks.indexWhere(
+      (block) => block.id == anchor.endBlockId,
+    );
+    return startIndex >= 0 &&
+        endIndex >= 0 &&
+        blockIndex > startIndex &&
+        blockIndex < endIndex;
   }
 
   Widget _buildAnchorError(BuildContext context) {
@@ -261,6 +382,16 @@ class _ReaderScreenState extends State<ReaderScreen> {
                   onPressed: () => _showStyleSheet(context),
                 ),
               ),
+              Positioned(
+                bottom: 12,
+                right: 16,
+                child: IconButton(
+                  key: const Key('reader-add-standalone-note'),
+                  tooltip: 'Add standalone note',
+                  icon: const Icon(Icons.note_add_outlined),
+                  onPressed: _requestStandaloneNote,
+                ),
+              ),
             ],
           ),
         ),
@@ -304,6 +435,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
           widget.articleRepository ?? _defaultArticleRepository();
       final article = await repository.readArticle(widget.articleId);
       final anchorResolution = await _resolveRouteAnchor(article);
+      final assetRepository =
+          widget.readingAssetRepository ?? _defaultAssetRepository();
+      final assets = await _readAssets(assetRepository, article.id);
       final savedProgress = anchorResolution.wasRequested
           ? null
           : await _readSavedProgress(article.id);
@@ -311,8 +445,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
         return;
       }
       _readerController?.dispose();
-      final assetRepository =
-          widget.readingAssetRepository ?? _defaultAssetRepository();
       _readerController = ReaderController(
         articleId: article.id,
         repository: assetRepository,
@@ -335,6 +467,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
             ? null
             : widget.routeContext.anchorId;
         _anchorError = anchorResolution.errorMessage;
+        _assets = assets;
+        _selection = null;
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
         unawaited(_positionInitialReader());
@@ -344,6 +478,92 @@ class _ReaderScreenState extends State<ReaderScreen> {
         setState(() => _loadError = error);
       }
     }
+  }
+
+  Future<List<ReadingAsset>> _readAssets(
+    ReadingAssetRepository? repository,
+    String articleId,
+  ) async {
+    if (repository == null) {
+      return const [];
+    }
+    try {
+      return await repository.readAssets(articleId: articleId);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  void _onSelectionChanged(ReaderSelection? selection) {
+    if (!mounted) {
+      return;
+    }
+    setState(() => _selection = selection);
+  }
+
+  Widget _buildContextMenu(
+    BuildContext context,
+    SelectableRegionState selectableRegionState,
+  ) {
+    final selection = _selection;
+    if (selection == null) {
+      return const SizedBox.shrink();
+    }
+    return ReaderContextMenu(
+      selection: selection,
+      anchors: selectableRegionState.contextMenuAnchors,
+      onAction: (action) => unawaited(_handleContextAction(action, selection)),
+    );
+  }
+
+  Future<void> _handleContextAction(
+    ReaderContextAction action,
+    ReaderSelection selection,
+  ) async {
+    final article = _article;
+    if (article == null) {
+      return;
+    }
+    switch (action) {
+      case ReaderContextAction.highlight:
+        final repository =
+            widget.readingAssetRepository ?? _defaultAssetRepository();
+        if (repository == null) {
+          return;
+        }
+        await ReaderSelectionController(
+          article: article,
+          repository: repository,
+          onAssetsChanged: (assets) {
+            if (mounted) {
+              setState(() => _assets = assets);
+            }
+          },
+        ).highlight(selection);
+      case ReaderContextAction.openAssetCard:
+        widget.onOpenAssetCard?.call(
+          ReaderAssetCardRequest(articleId: article.id, selection: selection),
+        );
+      case ReaderContextAction.explainWithAi:
+        widget.onExplainWithAi?.call(
+          ReaderAiExplanationRequest(
+            articleId: article.id,
+            selection: selection,
+          ),
+        );
+      case ReaderContextAction.copy:
+        break;
+    }
+  }
+
+  void _requestStandaloneNote() {
+    final article = _article;
+    if (article == null) {
+      return;
+    }
+    widget.onStandaloneNoteRequested?.call(
+      ReaderStandaloneNoteDraftRequest(articleId: article.id),
+    );
   }
 
   Future<_AnchorResolution> _resolveRouteAnchor(Article article) async {
@@ -643,6 +863,13 @@ class ReaderArticleUnavailableException implements Exception {
 
   @override
   String toString() => 'No article repository is available.';
+}
+
+class _HighlightRange {
+  const _HighlightRange(this.start, this.end);
+
+  final int start;
+  final int end;
 }
 
 class _AnchorResolution {

@@ -118,6 +118,59 @@ void main() {
     );
   });
 
+  testWidgets('persisted highlights render across block boundaries', (
+    tester,
+  ) async {
+    final article = Article(
+      id: 'article-1',
+      title: 'Reader article',
+      sourceName: 'Deep Reading',
+      contentChecksum: 'checksum-1',
+      blocks: const [
+        ArticleBlock(
+          id: 'block-1',
+          articleId: 'article-1',
+          position: 1,
+          content: 'First block',
+        ),
+        ArticleBlock(
+          id: 'block-2',
+          articleId: 'article-1',
+          position: 2,
+          content: 'Second block',
+        ),
+      ],
+    );
+    final anchor = TextAnchor(
+      id: 'cross-anchor',
+      assetId: 'cross-asset',
+      articleId: article.id,
+      startBlockId: 'block-1',
+      endBlockId: 'block-2',
+      startUtf16Offset: 2,
+      endUtf16Offset: 4,
+      selectedText: 'rst blockSeco',
+      contentChecksum: article.contentChecksum,
+    );
+
+    await _pumpReader(
+      tester,
+      article: article,
+      assets: [
+        ReadingAsset(
+          id: anchor.assetId,
+          ownerId: 'owner-1',
+          anchor: anchor,
+          noteContent: null,
+          tags: const [],
+        ),
+      ],
+    );
+
+    expect(find.byKey(const Key('highlighted-block-block-1')), findsOneWidget);
+    expect(find.byKey(const Key('highlighted-block-block-2')), findsOneWidget);
+  });
+
   testWidgets(
     'reader scrolling writes a rendered non-zero UTF-16 progress position',
     (tester) async {
