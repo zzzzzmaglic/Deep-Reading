@@ -1,0 +1,11 @@
+{
+  "tasks": {
+    "check": "deno check index.ts context.ts",
+    "test": "deno test context_test.ts"
+  },
+  "fmt": {
+    "lineWidth": 100,
+    "semiColons": true,
+    "singleQuote": false
+  }
+}
