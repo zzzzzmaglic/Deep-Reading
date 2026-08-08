@@ -73,6 +73,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   ReaderSelectionSession? _selectionSession;
   ReadingAssetRepository? _assetRepository;
   Object? _assetsReadError;
+  Object? _assetCardError;
   Object? _highlightError;
   ReaderSelection? _retryHighlightSelection;
   bool _retryHighlightRefreshOnly = false;
@@ -122,6 +123,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
             _buildContent(context),
             _buildToolbar(context),
             if (_assetsReadError != null) _buildAssetsReadError(context),
+            if (_assetCardError != null) _buildAssetCardError(context),
             if (_highlightError != null) _buildHighlightError(context),
             if (_readerController?.hasProgressError ?? false)
               _buildProgressError(context),
@@ -461,6 +463,24 @@ class _ReaderScreenState extends State<ReaderScreen> {
     );
   }
 
+  Widget _buildAssetCardError(BuildContext context) {
+    return Positioned(
+      left: 16,
+      right: 16,
+      bottom: _assetsReadError == null ? 76 : 148,
+      child: Material(
+        color: Theme.of(context).colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(8),
+        child: const ListTile(
+          key: Key('reader-asset-card-error'),
+          dense: true,
+          title: Text('Reading asset card could not be opened.'),
+          subtitle: Text('Please try again later.'),
+        ),
+      ),
+    );
+  }
+
   Widget _buildHighlightError(BuildContext context) {
     return Positioned(
       left: 16,
@@ -538,6 +558,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
         _assetRepository = assetRepository;
         _assets = assetRead.assets;
         _assetsReadError = assetRead.error;
+        _assetCardError = null;
         _selection = null;
         _highlightError = null;
         _retryHighlightSelection = null;
@@ -737,6 +758,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
       return;
     }
     try {
+      if (mounted) {
+        setState(() => _assetCardError = null);
+      }
       await ReadingAssetCardRequestPresenter(
         repository: repository,
       ).presentAssetRequest(
@@ -744,12 +768,31 @@ class _ReaderScreenState extends State<ReaderScreen> {
         request: request,
         article: article,
         onReaderAssetsRefresh: _refreshAssetsAfterCardDelete,
+        onAssetSaved: _refreshAssetsAfterAssetSave,
       );
     } catch (error) {
       if (mounted) {
-        setState(() => _highlightError = error);
+        setState(() => _assetCardError = error);
       }
     }
+  }
+
+  Future<void> _refreshAssetsAfterAssetSave(ReadingAsset savedAsset) async {
+    final article = _article;
+    final repository = _assetRepository ?? _defaultAssetRepository();
+    if (article == null || repository == null) {
+      return;
+    }
+    final result = await _readAssets(repository, article.id);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      if (result.error == null) {
+        _assets = result.assets;
+      }
+      _assetsReadError = result.error;
+    });
   }
 
   Future<void> _refreshAssetsAfterCardDelete(ReadingAsset deletedAsset) async {
@@ -793,11 +836,25 @@ class _ReaderScreenState extends State<ReaderScreen> {
     if (repository == null) {
       return;
     }
-    unawaited(
-      ReadingAssetCardRequestPresenter(
+    unawaited(_presentStandaloneNoteRequest(repository, request));
+  }
+
+  Future<void> _presentStandaloneNoteRequest(
+    ReadingAssetRepository repository,
+    ReaderStandaloneNoteDraftRequest request,
+  ) async {
+    try {
+      if (mounted) {
+        setState(() => _assetCardError = null);
+      }
+      await ReadingAssetCardRequestPresenter(
         repository: repository,
-      ).presentStandaloneNoteRequest(context, request: request),
-    );
+      ).presentStandaloneNoteRequest(context, request: request);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _assetCardError = error);
+      }
+    }
   }
 
   Future<_AnchorResolution> _resolveRouteAnchor(Article article) async {

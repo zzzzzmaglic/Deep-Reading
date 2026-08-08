@@ -18,6 +18,7 @@ class ReadingAssetCardRequestPresenter {
     required Article article,
     required Future<void> Function(ReadingAsset deletedAsset)
     onReaderAssetsRefresh,
+    Future<void> Function(ReadingAsset savedAsset)? onAssetSaved,
   }) async {
     if (article.id != request.articleId) {
       throw ArgumentError.value(
@@ -41,6 +42,7 @@ class ReadingAssetCardRequestPresenter {
       context,
       asset: asset,
       startInEditing: true,
+      onSaved: onAssetSaved,
       onDeleted: onReaderAssetsRefresh,
     );
   }
@@ -70,6 +72,7 @@ class ReadingAssetCardRequestPresenter {
     AssetEditorDraft? draft,
     List<Tag>? availableTags,
     bool startInEditing = false,
+    Future<void> Function(ReadingAsset asset)? onSaved,
     Future<void> Function(ReadingAsset)? onDeleted,
   }) => showDialog<void>(
     context: context,
@@ -80,6 +83,7 @@ class ReadingAssetCardRequestPresenter {
       availableTags: availableTags,
       repository: repository,
       startInEditing: startInEditing,
+      onSaved: onSaved,
       onDeleted: onDeleted,
       onClosed: () => Navigator.of(dialogContext).pop(),
     ),
@@ -104,7 +108,7 @@ class ReadingAssetCard extends StatefulWidget {
   final List<Tag>? availableTags;
   final bool startInEditing;
   final VoidCallback? onClosed;
-  final ValueChanged<ReadingAsset>? onSaved;
+  final Future<void> Function(ReadingAsset asset)? onSaved;
   final Future<void> Function(ReadingAsset asset)? onDeleted;
   @override
   State<ReadingAssetCard> createState() => _ReadingAssetCardState();
@@ -353,7 +357,13 @@ class _ReadingAssetCardState extends State<ReadingAssetCard> {
     try {
       final saved = await _controller.save();
       if (!mounted) return;
-      widget.onSaved?.call(saved);
+      if (widget.onSaved != null) {
+        try {
+          await widget.onSaved!(saved);
+        } catch (_) {
+          // The asset is saved even when its owner cannot refresh local state.
+        }
+      }
       widget.onClosed?.call();
     } catch (_) {
       if (mounted) setState(() => _error = '保存失败，请重试');

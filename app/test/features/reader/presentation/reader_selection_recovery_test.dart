@@ -124,11 +124,10 @@ void main() {
     'default reader opens the linked asset card and removes deleted highlights',
     (tester) async {
       final adapter = _TestSelectionAdapter(_selection);
-      final repository = _FakeReadingAssetRepository()
-        ..assets.add(_assetForSelection(id: 'asset-1'));
+      final repository = _FakeReadingAssetRepository();
       await _pumpReader(tester, adapter: adapter, repository: repository);
 
-      expect(find.byKey(const Key('highlighted-block-b-1')), findsOneWidget);
+      expect(find.byKey(const Key('highlighted-block-b-1')), findsNothing);
       await tester.tap(find.text('打开阅读资产卡片'));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('asset-note-input')), findsOneWidget);
@@ -138,7 +137,7 @@ void main() {
       await tester.tap(find.text('确认'));
       await tester.pumpAndSettle();
 
-      expect(repository.deletedIds, contains('asset-1'));
+      expect(repository.deletedIds, contains('created-1'));
       expect(find.byKey(const Key('highlighted-block-b-1')), findsNothing);
     },
   );
@@ -167,7 +166,15 @@ void main() {
     tester,
   ) async {
     final repository = _FakeReadingAssetRepository()
-      ..assets.add(_assetForSelection(id: 'asset-1'));
+      ..assets.add(
+        const ReadingAsset(
+          id: 'preloaded-asset',
+          ownerId: 'owner-1',
+          anchor: null,
+          noteContent: 'Existing standalone note',
+          tags: [],
+        ),
+      );
     await _pumpReader(
       tester,
       adapter: _TestSelectionAdapter(_selection),
@@ -187,6 +194,92 @@ void main() {
     expect(find.text('删除失败，请重试'), findsNothing);
     expect(find.byKey(const Key('highlighted-block-b-1')), findsNothing);
   });
+
+  testWidgets(
+    'default reader refreshes and renders a newly saved linked asset',
+    (tester) async {
+      final repository = _FakeReadingAssetRepository()
+        ..assets.add(
+          const ReadingAsset(
+            id: 'preloaded-asset',
+            ownerId: 'owner-1',
+            anchor: null,
+            noteContent: 'Existing standalone note',
+            tags: [],
+          ),
+        );
+      await _pumpReader(
+        tester,
+        adapter: _TestSelectionAdapter(_selection),
+        repository: repository,
+      );
+
+      expect(find.byKey(const Key('highlighted-block-b-1')), findsNothing);
+      await tester.tap(find.text('打开阅读资产卡片'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('asset-note-input')),
+        'Linked note',
+      );
+      await tester.tap(find.byTooltip('完成编辑'));
+      await tester.pumpAndSettle();
+
+      expect(repository.assets.map((asset) => asset.id), contains('created-1'));
+      expect(
+        repository.assets.map((asset) => asset.id),
+        contains('preloaded-asset'),
+      );
+      expect(find.byKey(const Key('highlighted-block-b-1')), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'standalone tag loading failure is visible and safe after disposal',
+    (tester) async {
+      final repository = _FakeReadingAssetRepository(
+        tagReadFailuresRemaining: 1,
+      );
+      await _pumpReader(
+        tester,
+        adapter: _TestSelectionAdapter(_selection),
+        repository: repository,
+      );
+
+      await tester.tap(find.byKey(const Key('reader-add-standalone-note')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('reader-asset-card-error')), findsOneWidget);
+      expect(find.byKey(const Key('reader-highlight-retry')), findsNothing);
+
+      final pendingTags = Completer<List<Tag>>();
+      repository.pendingTags = pendingTags;
+      await tester.tap(find.byKey(const Key('reader-add-standalone-note')));
+      await tester.pump();
+      await tester.pumpWidget(const SizedBox.shrink());
+      pendingTags.completeError(StateError('tags unavailable'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'asset card presentation failure does not offer highlight retry',
+    (tester) async {
+      final repository = _FakeReadingAssetRepository(
+        createFailuresRemaining: 1,
+      );
+      await _pumpReader(
+        tester,
+        adapter: _TestSelectionAdapter(_selection),
+        repository: repository,
+      );
+
+      await tester.tap(find.text('打开阅读资产卡片'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('reader-asset-card-error')), findsOneWidget);
+      expect(find.byKey(const Key('reader-highlight-retry')), findsNothing);
+    },
+  );
 }
 
 double _controlsOpacity(WidgetTester tester) {
@@ -320,12 +413,15 @@ class _FakeReadingAssetRepository implements ReadingAssetRepository {
   _FakeReadingAssetRepository({
     this.createFailuresRemaining = 0,
     this.assetReadFailuresRemaining = 0,
+    this.tagReadFailuresRemaining = 0,
   });
 
   final List<ReadingAsset> assets = <ReadingAsset>[];
   int createFailuresRemaining;
   int assetReadFailuresRemaining;
+  int tagReadFailuresRemaining;
   int createHighlightCalls = 0;
+  Completer<List<Tag>>? pendingTags;
   final deletedIds = <String>[];
   final createdStandaloneNotes = <String>[];
   Completer<void>? pendingCreate;
@@ -347,11 +443,11 @@ class _FakeReadingAssetRepository implements ReadingAssetRepository {
       throw StateError('highlight create failed');
     }
     final asset = ReadingAsset(
-      id: 'asset-$createHighlightCalls',
+      id: 'created-$createHighlightCalls',
       ownerId: 'owner-1',
       anchor: TextAnchor(
         id: 'anchor-$createHighlightCalls',
-        assetId: 'asset-$createHighlightCalls',
+        assetId: 'created-$createHighlightCalls',
         articleId: articleId,
         startBlockId: startBlockId,
         endBlockId: endBlockId,
@@ -387,7 +483,14 @@ class _FakeReadingAssetRepository implements ReadingAssetRepository {
   }
 
   @override
-  Future<List<Tag>> readTags() async => const [];
+  Future<List<Tag>> readTags() async {
+    if (pendingTags != null) return pendingTags!.future;
+    if (tagReadFailuresRemaining > 0) {
+      tagReadFailuresRemaining--;
+      throw StateError('tag read failed');
+    }
+    return const [];
+  }
 
   @override
   Future<Tag> createTag({required String name}) => throw UnimplementedError();
@@ -416,7 +519,19 @@ class _FakeReadingAssetRepository implements ReadingAssetRepository {
     required String assetId,
     required String? noteContent,
     required List<String> tagIds,
-  }) => throw UnimplementedError();
+  }) async {
+    final index = assets.indexWhere((asset) => asset.id == assetId);
+    final existing = assets[index];
+    final saved = ReadingAsset(
+      id: existing.id,
+      ownerId: existing.ownerId,
+      anchor: existing.anchor,
+      noteContent: noteContent,
+      tags: existing.tags,
+    );
+    assets[index] = saved;
+    return saved;
+  }
 
   @override
   Future<ReadingAsset> createStandaloneNoteWithTags({
