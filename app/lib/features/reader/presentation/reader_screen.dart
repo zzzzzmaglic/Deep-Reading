@@ -22,6 +22,7 @@ class ReaderScreen extends StatefulWidget {
     this.preferenceStore,
     this.progressReader,
     this.connectivity,
+    this.progressDebounceDuration = const Duration(milliseconds: 350),
     super.key,
   });
 
@@ -32,6 +33,7 @@ class ReaderScreen extends StatefulWidget {
   final PreferenceStore? preferenceStore;
   final Future<ProgressPosition?> Function(String articleId)? progressReader;
   final ReaderConnectivityPort? connectivity;
+  final Duration progressDebounceDuration;
 
   @override
   State<ReaderScreen> createState() => _ReaderScreenState();
@@ -47,7 +49,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
   Object? _loadError;
   String? _anchorError;
   ProgressPosition? _initialPosition;
+  ProgressPosition? _lastViewportPosition;
   String? _routeAnchorId;
+  bool _hasViewportProgressScheduled = false;
   bool _controlsVisible = true;
   ReaderFontSize _fontSize = ReaderFontSize.defaultSize;
   ReaderThemeMode _themeMode = ReaderThemeMode.system;
@@ -55,13 +59,16 @@ class _ReaderScreenState extends State<ReaderScreen> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_scheduleViewportProgress);
     unawaited(_loadPreferences());
     unawaited(_loadArticle());
   }
 
   @override
   void dispose() {
-    _scrollController.dispose();
+    _scrollController
+      ..removeListener(_scheduleViewportProgress)
+      ..dispose();
     _readerController?.dispose();
     super.dispose();
   }
@@ -123,60 +130,52 @@ class _ReaderScreenState extends State<ReaderScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return NotificationListener<UserScrollNotification>(
+    return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
-        if (notification.direction == ScrollDirection.forward &&
-            !_controlsVisible) {
-          setState(() => _controlsVisible = true);
-        } else if (notification.direction == ScrollDirection.reverse &&
-            _controlsVisible) {
-          setState(() => _controlsVisible = false);
+        if (notification is UserScrollNotification) {
+          if (notification.direction == ScrollDirection.forward &&
+              !_controlsVisible) {
+            setState(() => _controlsVisible = true);
+          } else if (notification.direction == ScrollDirection.reverse &&
+              _controlsVisible) {
+            setState(() => _controlsVisible = false);
+          }
+        }
+        if (notification is ScrollUpdateNotification ||
+            notification is ScrollEndNotification) {
+          _scheduleViewportProgress();
         }
         return false;
       },
-      child: CustomScrollView(
-        key: _viewportKey,
-        controller: _scrollController,
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.only(
-              top: 84,
-              left: 20,
-              right: 20,
-              bottom: 112,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => setState(() => _controlsVisible = !_controlsVisible),
+        child: CustomScrollView(
+          key: _viewportKey,
+          controller: _scrollController,
+          slivers: [
+            if (_anchorError != null)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(0, 84, 0, 0),
+                sliver: SliverToBoxAdapter(child: _buildAnchorError(context)),
+              ),
+            SliverPadding(
+              padding: const EdgeInsets.only(
+                top: 84,
+                left: 20,
+                right: 20,
+                bottom: 112,
+              ),
+              sliver: SliverToBoxAdapter(
+                child: Column(
+                  children: article.blocks
+                      .map((block) => _buildBlock(context, block))
+                      .toList(growable: false),
+                ),
+              ),
             ),
-            sliver: SliverList.builder(
-              itemCount: article.blocks.length,
-              itemBuilder: (context, index) {
-                final block = article.blocks[index];
-                final content = Padding(
-                  key: _blockKeys[block.id],
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text(
-                    block.content,
-                    style: TextStyle(
-                      fontSize: _fontSize.points,
-                      height: 1.45,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
-                );
-                final isRouteAnchor = block.id == _routeAnchorBlockId;
-                return KeyedSubtree(
-                  key: Key('reader-block-${block.id}'),
-                  child: isRouteAnchor
-                      ? KeyedSubtree(
-                          key: Key('reader-anchor-${_routeAnchorId!}'),
-                          child: content,
-                        )
-                      : content,
-                );
-              },
-            ),
-          ),
-          if (_anchorError != null)
-            SliverToBoxAdapter(child: _buildAnchorError(context)),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -188,6 +187,31 @@ class _ReaderScreenState extends State<ReaderScreen> {
     return _initialPosition?.blockId;
   }
 
+  Widget _buildBlock(BuildContext context, ArticleBlock block) {
+    final content = Padding(
+      key: _blockKeys[block.id],
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Text(
+        block.content,
+        style: TextStyle(
+          fontSize: _fontSize.points,
+          height: 1.45,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
+      ),
+    );
+    final isRouteAnchor = block.id == _routeAnchorBlockId;
+    return KeyedSubtree(
+      key: Key('reader-block-${block.id}'),
+      child: isRouteAnchor
+          ? KeyedSubtree(
+              key: Key('reader-anchor-${_routeAnchorId!}'),
+              child: content,
+            )
+          : content,
+    );
+  }
+
   Widget _buildAnchorError(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
@@ -196,12 +220,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
         borderRadius: BorderRadius.circular(8),
         child: ListTile(
           key: const Key('reader-anchor-error'),
-          title: const Text('Requested reading anchor is unavailable.'),
+          title: Text(_anchorError!),
           trailing: IconButton(
             key: const Key('reader-anchor-retry'),
             tooltip: 'Retry',
             icon: const Icon(Icons.refresh),
-            onPressed: _loadArticle,
+            onPressed: _retryAnchorResolution,
           ),
         ),
       ),
@@ -212,6 +236,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     return IgnorePointer(
       ignoring: !_controlsVisible,
       child: AnimatedOpacity(
+        key: const Key('reader-controls'),
         duration: const Duration(milliseconds: 180),
         opacity: _controlsVisible ? 1 : 0,
         child: SafeArea(
@@ -278,9 +303,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
       final repository =
           widget.articleRepository ?? _defaultArticleRepository();
       final article = await repository.readArticle(widget.articleId);
-      final anchorRequested = widget.routeContext.anchorId != null;
-      final routeAnchor = await _readRouteAnchor(article);
-      final savedProgress = anchorRequested
+      final anchorResolution = await _resolveRouteAnchor(article);
+      final savedProgress = anchorResolution.wasRequested
           ? null
           : await _readSavedProgress(article.id);
       if (!mounted) {
@@ -293,6 +317,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
         articleId: article.id,
         repository: assetRepository,
         connectivity: widget.connectivity ?? const SocketReaderConnectivity(),
+        debounceDuration: widget.progressDebounceDuration,
       )..addListener(_onControllerChanged);
       _blockKeys
         ..clear()
@@ -301,16 +326,15 @@ class _ReaderScreenState extends State<ReaderScreen> {
         );
       setState(() {
         _article = article;
+        _lastViewportPosition = null;
         _initialPosition = restoreReaderPosition(
-          routeAnchor: routeAnchor,
+          routeAnchor: anchorResolution.position,
           savedProgress: savedProgress,
         );
-        _routeAnchorId = routeAnchor == null
+        _routeAnchorId = anchorResolution.position == null
             ? null
             : widget.routeContext.anchorId;
-        if (anchorRequested && routeAnchor == null) {
-          _anchorError = 'Requested reading anchor is unavailable.';
-        }
+        _anchorError = anchorResolution.errorMessage;
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
         unawaited(_positionInitialReader());
@@ -322,28 +346,58 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
   }
 
-  Future<ProgressPosition?> _readRouteAnchor(Article article) async {
+  Future<_AnchorResolution> _resolveRouteAnchor(Article article) async {
     final anchorId = widget.routeContext.anchorId;
     if (anchorId == null) {
-      return null;
+      return const _AnchorResolution.notRequested();
     }
     final repository =
         widget.readingAssetRepository ?? _defaultAssetRepository();
     if (repository == null) {
-      return null;
+      return const _AnchorResolution.unavailable();
     }
-    final assets = await repository.readAssets(articleId: article.id);
-    for (final asset in assets) {
-      final anchor = asset.anchor;
-      if (anchor?.id == anchorId &&
-          article.blocks.any((block) => block.id == anchor!.startBlockId)) {
-        return ProgressPosition(
-          blockId: anchor!.startBlockId,
-          utf16Offset: anchor.startUtf16Offset,
-        );
+    try {
+      final assets = await repository.readAssets(articleId: article.id);
+      for (final asset in assets) {
+        final anchor = asset.anchor;
+        if (anchor?.id == anchorId &&
+            article.blocks.any((block) => block.id == anchor!.startBlockId)) {
+          return _AnchorResolution.found(
+            ProgressPosition(
+              blockId: anchor!.startBlockId,
+              utf16Offset: anchor.startUtf16Offset,
+            ),
+          );
+        }
       }
+    } catch (_) {
+      return const _AnchorResolution.lookupFailed();
     }
-    return null;
+    return const _AnchorResolution.unavailable();
+  }
+
+  Future<void> _retryAnchorResolution() async {
+    final article = _article;
+    if (article == null) {
+      await _loadArticle();
+      return;
+    }
+    final resolution = await _resolveRouteAnchor(article);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _anchorError = resolution.errorMessage;
+      if (resolution.position != null) {
+        _initialPosition = resolution.position;
+        _routeAnchorId = widget.routeContext.anchorId;
+      }
+    });
+    if (resolution.position != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_positionInitialReader());
+      });
+    }
   }
 
   Future<ProgressPosition?> _readSavedProgress(String articleId) async {
@@ -416,6 +470,78 @@ class _ReaderScreenState extends State<ReaderScreen> {
         _scrollController.position.maxScrollExtent,
       ),
     );
+  }
+
+  void _scheduleViewportProgress() {
+    if (_hasViewportProgressScheduled) {
+      return;
+    }
+    _hasViewportProgressScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _hasViewportProgressScheduled = false;
+      _recordViewportProgress();
+    });
+  }
+
+  void _recordViewportProgress() {
+    final article = _article;
+    final controller = _readerController;
+    final viewportContext = _viewportKey.currentContext;
+    if (article == null || controller == null || viewportContext == null) {
+      return;
+    }
+    final viewportBox = viewportContext.findRenderObject() as RenderBox?;
+    if (viewportBox == null) {
+      return;
+    }
+    final focus = viewportBox.localToGlobal(
+      Offset(viewportBox.size.width * 0.05, viewportBox.size.height * 0.16),
+    );
+    for (final block in article.blocks) {
+      final blockBox =
+          _blockKeys[block.id]?.currentContext?.findRenderObject()
+              as RenderBox?;
+      if (blockBox == null) {
+        continue;
+      }
+      final blockOrigin = blockBox.localToGlobal(Offset.zero);
+      final painter = _layoutBlockText(block, blockBox.size.width);
+      final localY = focus.dy - blockOrigin.dy;
+      if (localY < 0 || localY > painter.height) {
+        continue;
+      }
+      final textPosition = painter.getPositionForOffset(
+        Offset(
+          (focus.dx - blockOrigin.dx).clamp(0, blockBox.size.width),
+          localY.clamp(0, painter.height),
+        ),
+      );
+      final position = ProgressPosition(
+        blockId: block.id,
+        utf16Offset: textPosition.offset,
+      );
+      if (position == _lastViewportPosition) {
+        return;
+      }
+      _lastViewportPosition = position;
+      controller.updateProgress(position.blockId, position.utf16Offset);
+      return;
+    }
+  }
+
+  TextPainter _layoutBlockText(ArticleBlock block, double maxWidth) {
+    return TextPainter(
+      text: TextSpan(
+        text: block.content,
+        style: TextStyle(
+          fontSize: _fontSize.points,
+          height: 1.45,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
+      ),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout(maxWidth: maxWidth);
   }
 
   Future<void> _loadPreferences() async {
@@ -517,4 +643,29 @@ class ReaderArticleUnavailableException implements Exception {
 
   @override
   String toString() => 'No article repository is available.';
+}
+
+class _AnchorResolution {
+  const _AnchorResolution.notRequested()
+    : wasRequested = false,
+      position = null,
+      errorMessage = null;
+
+  const _AnchorResolution.found(this.position)
+    : wasRequested = true,
+      errorMessage = null;
+
+  const _AnchorResolution.unavailable()
+    : wasRequested = true,
+      position = null,
+      errorMessage = 'Requested reading anchor is unavailable.';
+
+  const _AnchorResolution.lookupFailed()
+    : wasRequested = true,
+      position = null,
+      errorMessage = 'Unable to resolve the requested reading anchor.';
+
+  final bool wasRequested;
+  final ProgressPosition? position;
+  final String? errorMessage;
 }
