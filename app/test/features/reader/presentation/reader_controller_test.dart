@@ -184,6 +184,9 @@ class _RecordingReadingAssetRepository implements ReadingAssetRepository {
 
   @override
   Future<List<Tag>> readTags() => throw UnimplementedError();
+
+  @override
+  Future<Tag> createTag({required String name}) => throw UnimplementedError();
 }
 
 class ProgressWrite {

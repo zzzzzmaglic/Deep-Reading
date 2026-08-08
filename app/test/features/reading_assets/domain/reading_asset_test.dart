@@ -68,6 +68,22 @@ void main() {
       'upsert_reading_progress',
     ]);
   });
+
+  test(
+    'repository creates a typed user tag through the create_tag RPC',
+    () async {
+      final dataSource = _RecordingReadingAssetDataSource();
+      final repository = SupabaseReadingAssetRepository.forDataSource(
+        dataSource,
+      );
+
+      final tag = await repository.createTag(name: 'New tag');
+
+      expect(tag.id, 'tag-1');
+      expect(tag.name, 'Tag');
+      expect(dataSource.rpcNames, ['create_tag']);
+    },
+  );
 }
 
 class _RecordingReadingAssetDataSource implements ReadingAssetRemoteDataSource {
@@ -83,6 +99,7 @@ class _RecordingReadingAssetDataSource implements ReadingAssetRemoteDataSource {
       'create_highlight_asset' ||
       'create_standalone_note' ||
       'update_reading_asset' => 'asset-1',
+      'create_tag' => 'tag-1',
       'upsert_reading_progress' => 'progress-1',
       _ => null,
     };

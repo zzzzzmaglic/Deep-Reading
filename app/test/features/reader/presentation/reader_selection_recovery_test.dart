@@ -317,6 +317,9 @@ class _FakeReadingAssetRepository implements ReadingAssetRepository {
   Future<List<Tag>> readTags() => throw UnimplementedError();
 
   @override
+  Future<Tag> createTag({required String name}) => throw UnimplementedError();
+
+  @override
   Future<void> setAssetTags({
     required String assetId,
     required List<String> tagIds,

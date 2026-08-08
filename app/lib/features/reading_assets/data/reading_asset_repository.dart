@@ -35,6 +35,8 @@ abstract interface class ReadingAssetRepository {
   Future<List<ReadingAsset>> readAssets({String? articleId});
 
   Future<List<Tag>> readTags();
+
+  Future<Tag> createTag({required String name});
 }
 
 abstract interface class ReadingAssetRemoteDataSource {
@@ -193,6 +195,18 @@ class SupabaseReadingAssetRepository implements ReadingAssetRepository {
   Future<List<Tag>> readTags() async {
     final rows = await _dataSource.readRows('tags');
     return rows.map(_tagFromJson).toList(growable: false);
+  }
+
+  @override
+  Future<Tag> createTag({required String name}) async {
+    final tagId =
+        await _dataSource.callRpc('create_tag', parameters: {'p_name': name})
+            as String;
+    final tags = await readTags();
+    return tags.firstWhere(
+      (tag) => tag.id == tagId,
+      orElse: () => throw StateError('RPC returned an unreadable tag.'),
+    );
   }
 
   Future<ReadingAsset> _readAsset(String assetId) async {
