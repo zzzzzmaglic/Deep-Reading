@@ -19,10 +19,26 @@ function formatBlock(block: ArticleBlock): string {
 }
 
 function joinWithinLimit(blocks: ArticleBlock[]): string {
-  const context = blocks.map(formatBlock).join("\n\n");
-  return context.length <= MAX_CONTEXT_CHARS
-    ? context
-    : `${context.slice(0, MAX_CONTEXT_CHARS - 16)}\n[Context capped]`;
+  const formatted = blocks.map(formatBlock);
+  const context = formatted.join("\n\n");
+  if (context.length <= MAX_CONTEXT_CHARS) {
+    return context;
+  }
+
+  const headers = blocks.map((block) => `[Block ${block.position} | ${block.id}]\n`);
+  const separatorChars = Math.max(0, blocks.length - 1) * 2;
+  const availableContentChars = Math.max(
+    0,
+    MAX_CONTEXT_CHARS - separatorChars - headers.reduce((sum, header) => sum + header.length, 0),
+  );
+  const baseShare = Math.floor(availableContentChars / blocks.length);
+  let remainder = availableContentChars % blocks.length;
+  const boundedBlocks = blocks.map((block, index) => {
+    const allowance = baseShare + (remainder-- > 0 ? 1 : 0);
+    const content = block.content.trim();
+    return `${headers[index]}${content.slice(0, allowance)}`;
+  });
+  return boundedBlocks.join("\n\n");
 }
 
 export function buildArticleContext(

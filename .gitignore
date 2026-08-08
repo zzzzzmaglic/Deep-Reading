@@ -44,3 +44,6 @@ Figma UX Version Local Copy/
 
 # Project-local development SDKs
 .tools/
+
+# Server-only local Supabase Edge Function secrets
+supabase/.env.local
