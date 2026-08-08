@@ -64,6 +64,7 @@ create table public.asset_anchors (
     or start_utf16_offset <= end_utf16_offset
   ),
   unique (id, owner_id),
+  unique (asset_id),
   unique (asset_id, id)
 );
 

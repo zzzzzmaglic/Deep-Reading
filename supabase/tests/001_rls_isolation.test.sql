@@ -1,6 +1,6 @@
 begin;
 
-select plan(14);
+select plan(15);
 
 insert into auth.users (id, aud, role, is_anonymous)
 values (
@@ -126,6 +126,12 @@ select throws_ok(
   '23503',
   'insert or update on table "asset_tags" violates foreign key constraint "asset_tags_tag_id_owner_id_fkey"',
   'cross-owner asset tag is rejected'
+);
+select throws_ok(
+  $$insert into public.asset_anchors (id, owner_id, asset_id, article_id, start_block_id, end_block_id, start_utf16_offset, end_utf16_offset, selected_text, content_checksum) values ('99999999-9999-9999-9999-999999999999', '11111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 5, 8, '的阅读', 'sha256:duplicate-anchor')$$,
+  '23505',
+  'duplicate key value violates unique constraint "asset_anchors_asset_id_key"',
+  'a reading asset cannot have a second anchor'
 );
 delete from public.reading_assets where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 select is((select count(*) from public.asset_anchors where id = 'cccccccc-cccc-cccc-cccc-cccccccccccc'), 0::bigint, 'deleting an asset removes its anchor');
