@@ -35,7 +35,7 @@ void main() {
     expect(context.anchorId, 'anchor-1');
   });
 
-  testWidgets('direct reader URLs use feed context', (tester) async {
+  testWidgets('reader route rejects missing extras', (tester) async {
     final router = createAppRouter(initialLocation: '/reader/a-1');
 
     await tester.pumpWidget(
@@ -47,10 +47,12 @@ void main() {
 
     await tester.pump();
 
-    final reader = tester.widget<ReaderRouteContractSurface>(
-      find.byType(ReaderRouteContractSurface),
+    final error = tester.takeException();
+    expect(error, isA<ArgumentError>());
+    expect(
+      error.toString(),
+      contains('Reader routes require a ReaderRouteContext.'),
     );
-    expect(reader.routeContext.origin, ReaderOrigin.feed);
   });
 
   testWidgets('reader route rejects invalid extras', (tester) async {
@@ -68,7 +70,12 @@ void main() {
 
     await tester.pump();
 
-    expect(tester.takeException(), isA<ArgumentError>());
+    final error = tester.takeException();
+    expect(error, isA<ArgumentError>());
+    expect(
+      error.toString(),
+      contains('Reader routes require a ReaderRouteContext.'),
+    );
   });
 
   testWidgets('declared knowledge and summary URLs resolve', (tester) async {

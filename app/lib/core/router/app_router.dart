@@ -10,9 +10,6 @@ class ReaderRouteContext {
   final String? anchorId;
 
   static ReaderRouteContext fromRouteExtra(Object? extra) {
-    if (extra == null) {
-      return const ReaderRouteContext(origin: ReaderOrigin.feed);
-    }
     if (extra is ReaderRouteContext) {
       return extra;
     }
