@@ -1,3 +1,4 @@
+import 'package:app/features/reader/presentation/reader_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -67,7 +68,7 @@ GoRouter createAppRouter({String initialLocation = '/', Object? initialExtra}) {
         path: '/reader/:articleId',
         builder: (context, state) {
           final routeContext = ReaderRouteContext.fromRouteExtra(state.extra);
-          return ReaderRouteContractSurface(
+          return ReaderScreen(
             articleId: state.pathParameters['articleId']!,
             routeContext: routeContext,
           );
@@ -87,30 +88,6 @@ GoRouter createAppRouter({String initialLocation = '/', Object? initialExtra}) {
       ),
     ],
   );
-}
-
-class ReaderRouteContractSurface extends StatelessWidget {
-  const ReaderRouteContractSurface({
-    required this.articleId,
-    required this.routeContext,
-    super.key,
-  });
-
-  final String articleId;
-  final ReaderRouteContext routeContext;
-
-  @override
-  Widget build(BuildContext context) {
-    final anchorId = routeContext.anchorId;
-    return Scaffold(
-      body: Center(
-        child: SizedBox(
-          key: anchorId == null ? null : Key('reader-anchor-$anchorId'),
-          child: Text(articleId),
-        ),
-      ),
-    );
-  }
 }
 
 class _ContractSurface extends StatelessWidget {
