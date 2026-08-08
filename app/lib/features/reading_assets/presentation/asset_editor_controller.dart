@@ -92,6 +92,10 @@ class AssetEditorController {
     _draft = _draft.withSelectedTagIds(ids);
   }
 
+  void syncFromAsset(ReadingAsset asset) {
+    _draft = AssetEditorDraft.fromAsset(asset);
+  }
+
   Future<ReadingAsset> save() async {
     final noteContent = _draft.noteContent.trim();
     final existingAsset = _draft.originalAsset;

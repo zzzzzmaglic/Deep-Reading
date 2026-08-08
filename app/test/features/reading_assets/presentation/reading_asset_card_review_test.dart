@@ -165,7 +165,7 @@ void main() {
                   selection: selection,
                 ),
                 article: article,
-                onReaderAssetsRefresh: () async => refreshes++,
+                onReaderAssetsRefresh: (_) async => refreshes++,
               ),
               child: const Text('open'),
             ),
@@ -208,8 +208,75 @@ void main() {
     final workTile = tester.widget<CheckboxListTile>(
       find.widgetWithText(CheckboxListTile, 'Work'),
     );
-    expect(workTile.value, false);
+    expect(workTile.value, true);
   });
+
+  testWidgets('view-mode tag saves also update the later editor draft', (
+    tester,
+  ) async {
+    final repository = _ReviewRepository(tags: const [locked, work]);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ReadingAssetCard(asset: highlight(), repository: repository),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('#标签'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Work'));
+    await tester.tap(find.text('完成'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('编辑'));
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const ValueKey('asset-note-input')),
+      'Keep saved tags',
+    );
+    await tester.tap(find.byTooltip('完成编辑'));
+    await tester.pumpAndSettle();
+
+    expect(repository.atomicSaveCalls, ['asset-1:Keep saved tags:locked,work']);
+  });
+
+  testWidgets(
+    'post-delete refresh failure closes without a delete failure message',
+    (tester) async {
+      final repository = _ReviewRepository(tags: const [locked, work]);
+      final presenter = ReadingAssetCardRequestPresenter(
+        repository: repository,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => FilledButton(
+              onPressed: () => presenter.presentAssetRequest(
+                context,
+                request: const ReaderAssetCardRequest(
+                  articleId: 'article-1',
+                  selection: selection,
+                ),
+                article: article,
+                onReaderAssetsRefresh: (_) async => throw StateError('refresh'),
+              ),
+              child: const Text('open refresh failure'),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('open refresh failure'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('删除'));
+      await tester.pump();
+      await tester.tap(find.text('确认'));
+      await tester.pumpAndSettle();
+
+      expect(repository.deletedIds, ['asset-1']);
+      expect(find.byKey(const ValueKey('asset-note-input')), findsNothing);
+      expect(find.text('删除失败，请重试'), findsNothing);
+    },
+  );
 
   testWidgets(
     'delete cancellation and failure keep the card open without callbacks',

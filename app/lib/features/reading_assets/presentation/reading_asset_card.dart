@@ -16,7 +16,8 @@ class ReadingAssetCardRequestPresenter {
     BuildContext context, {
     required ReaderAssetCardRequest request,
     required Article article,
-    required Future<void> Function() onReaderAssetsRefresh,
+    required Future<void> Function(ReadingAsset deletedAsset)
+    onReaderAssetsRefresh,
   }) async {
     if (article.id != request.articleId) {
       throw ArgumentError.value(
@@ -40,7 +41,7 @@ class ReadingAssetCardRequestPresenter {
       context,
       asset: asset,
       startInEditing: true,
-      onDeleted: (_) => onReaderAssetsRefresh(),
+      onDeleted: onReaderAssetsRefresh,
     );
   }
 
@@ -328,13 +329,15 @@ class _ReadingAssetCardState extends State<ReadingAssetCard> {
         assetId: _asset!.id,
         tagIds: selected.toList(),
       );
+      final updatedAsset = _copy(
+        _asset!,
+        _tags.where((tag) => selected.contains(tag.id)).toList(),
+      );
       if (mounted) {
-        setState(
-          () => _asset = _copy(
-            _asset!,
-            _tags.where((tag) => selected.contains(tag.id)).toList(),
-          ),
-        );
+        setState(() {
+          _asset = updatedAsset;
+          _controller.syncFromAsset(updatedAsset);
+        });
       }
     } catch (_) {
       if (mounted) setState(() => _error = '标签保存失败，请重试');
@@ -368,12 +371,15 @@ class _ReadingAssetCardState extends State<ReadingAssetCard> {
       _error = null;
     });
     try {
-      await widget.repository.deleteReadingAsset(_asset!.id);
+      final deletedAsset = _asset!;
+      await widget.repository.deleteReadingAsset(deletedAsset.id);
+      widget.onClosed?.call();
       if (widget.onDeleted != null) {
-        await widget.onDeleted!(_asset!);
-      }
-      if (mounted) {
-        widget.onClosed?.call();
+        try {
+          await widget.onDeleted!(deletedAsset);
+        } catch (_) {
+          // Deletion has already succeeded; post-delete refresh belongs to its owner.
+        }
       }
     } catch (_) {
       if (mounted) setState(() => _error = '删除失败，请重试');

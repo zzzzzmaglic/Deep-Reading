@@ -119,6 +119,74 @@ void main() {
 
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'default reader opens the linked asset card and removes deleted highlights',
+    (tester) async {
+      final adapter = _TestSelectionAdapter(_selection);
+      final repository = _FakeReadingAssetRepository()
+        ..assets.add(_assetForSelection(id: 'asset-1'));
+      await _pumpReader(tester, adapter: adapter, repository: repository);
+
+      expect(find.byKey(const Key('highlighted-block-b-1')), findsOneWidget);
+      await tester.tap(find.text('打开阅读资产卡片'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('asset-note-input')), findsOneWidget);
+
+      await tester.tap(find.byTooltip('删除'));
+      await tester.pump();
+      await tester.tap(find.text('确认'));
+      await tester.pumpAndSettle();
+
+      expect(repository.deletedIds, contains('asset-1'));
+      expect(find.byKey(const Key('highlighted-block-b-1')), findsNothing);
+    },
+  );
+
+  testWidgets('default reader opens the standalone note draft', (tester) async {
+    final repository = _FakeReadingAssetRepository();
+    await _pumpReader(
+      tester,
+      adapter: _TestSelectionAdapter(_selection),
+      repository: repository,
+    );
+
+    await tester.tap(find.byKey(const Key('reader-add-standalone-note')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('asset-note-input')),
+      'Standalone from reader',
+    );
+    await tester.tap(find.byTooltip('完成编辑'));
+    await tester.pumpAndSettle();
+
+    expect(repository.createdStandaloneNotes, ['Standalone from reader']);
+  });
+
+  testWidgets('reader treats a post-delete refresh failure as nonfatal', (
+    tester,
+  ) async {
+    final repository = _FakeReadingAssetRepository()
+      ..assets.add(_assetForSelection(id: 'asset-1'));
+    await _pumpReader(
+      tester,
+      adapter: _TestSelectionAdapter(_selection),
+      repository: repository,
+    );
+
+    await tester.tap(find.text('打开阅读资产卡片'));
+    await tester.pumpAndSettle();
+    repository.assetReadFailuresRemaining = 1;
+    await tester.tap(find.byTooltip('删除'));
+    await tester.pump();
+    await tester.tap(find.text('确认'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('asset-note-input')), findsNothing);
+    expect(find.byKey(const Key('reader-assets-error')), findsOneWidget);
+    expect(find.text('删除失败，请重试'), findsNothing);
+    expect(find.byKey(const Key('highlighted-block-b-1')), findsNothing);
+  });
 }
 
 double _controlsOpacity(WidgetTester tester) {
@@ -168,9 +236,9 @@ const _selection = ReaderSelection(
   selectedText: 'Selected',
 );
 
-ReadingAsset _assetForSelection() {
+ReadingAsset _assetForSelection({String? id}) {
   return ReadingAsset(
-    id: 'asset-${DateTime.now().microsecondsSinceEpoch}',
+    id: id ?? 'asset-${DateTime.now().microsecondsSinceEpoch}',
     ownerId: 'owner-1',
     anchor: selectionToAnchor(_article, _selection),
     noteContent: null,
@@ -258,6 +326,8 @@ class _FakeReadingAssetRepository implements ReadingAssetRepository {
   int createFailuresRemaining;
   int assetReadFailuresRemaining;
   int createHighlightCalls = 0;
+  final deletedIds = <String>[];
+  final createdStandaloneNotes = <String>[];
   Completer<void>? pendingCreate;
 
   @override
@@ -311,10 +381,13 @@ class _FakeReadingAssetRepository implements ReadingAssetRepository {
       throw UnimplementedError();
 
   @override
-  Future<void> deleteReadingAsset(String assetId) => throw UnimplementedError();
+  Future<void> deleteReadingAsset(String assetId) async {
+    deletedIds.add(assetId);
+    assets.removeWhere((asset) => asset.id == assetId);
+  }
 
   @override
-  Future<List<Tag>> readTags() => throw UnimplementedError();
+  Future<List<Tag>> readTags() async => const [];
 
   @override
   Future<Tag> createTag({required String name}) => throw UnimplementedError();
@@ -349,7 +422,16 @@ class _FakeReadingAssetRepository implements ReadingAssetRepository {
   Future<ReadingAsset> createStandaloneNoteWithTags({
     required String noteContent,
     required List<String> tagIds,
-  }) => throw UnimplementedError();
+  }) async {
+    createdStandaloneNotes.add(noteContent);
+    return ReadingAsset(
+      id: 'standalone-${createdStandaloneNotes.length}',
+      ownerId: 'owner-1',
+      anchor: null,
+      noteContent: noteContent,
+      tags: const [],
+    );
+  }
 }
 
 class _FakeArticleRepository implements ArticleRepository {

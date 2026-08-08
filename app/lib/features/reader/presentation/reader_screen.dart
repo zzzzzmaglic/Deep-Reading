@@ -10,6 +10,7 @@ import 'package:app/features/reader/presentation/selection/reader_context_menu.d
 import 'package:app/features/reader/presentation/selection/reader_selection_adapter.dart';
 import 'package:app/features/reading_assets/data/reading_asset_repository.dart';
 import 'package:app/features/reading_assets/domain/reading_asset.dart';
+import 'package:app/features/reading_assets/presentation/reading_asset_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -601,9 +602,16 @@ class _ReaderScreenState extends State<ReaderScreen> {
       case ReaderContextAction.highlight:
         _startHighlight(selection);
       case ReaderContextAction.openAssetCard:
-        widget.onOpenAssetCard?.call(
-          ReaderAssetCardRequest(articleId: article.id, selection: selection),
+        final request = ReaderAssetCardRequest(
+          articleId: article.id,
+          selection: selection,
         );
+        final onOpenAssetCard = widget.onOpenAssetCard;
+        if (onOpenAssetCard != null) {
+          onOpenAssetCard(request);
+        } else {
+          unawaited(_presentAssetCard(request, article));
+        }
       case ReaderContextAction.explainWithAi:
         widget.onExplainWithAi?.call(
           ReaderAiExplanationRequest(
@@ -715,13 +723,80 @@ class _ReaderScreenState extends State<ReaderScreen> {
     });
   }
 
+  Future<void> _presentAssetCard(
+    ReaderAssetCardRequest request,
+    Article article,
+  ) async {
+    final repository = _assetRepository ?? _defaultAssetRepository();
+    if (repository == null) {
+      if (mounted) {
+        setState(
+          () => _highlightError = StateError('Reading assets are unavailable.'),
+        );
+      }
+      return;
+    }
+    try {
+      await ReadingAssetCardRequestPresenter(
+        repository: repository,
+      ).presentAssetRequest(
+        context,
+        request: request,
+        article: article,
+        onReaderAssetsRefresh: _refreshAssetsAfterCardDelete,
+      );
+    } catch (error) {
+      if (mounted) {
+        setState(() => _highlightError = error);
+      }
+    }
+  }
+
+  Future<void> _refreshAssetsAfterCardDelete(ReadingAsset deletedAsset) async {
+    final article = _article;
+    final repository = _assetRepository ?? _defaultAssetRepository();
+    if (mounted) {
+      setState(() {
+        _assets = _assets
+            .where((asset) => asset.id != deletedAsset.id)
+            .toList(growable: false);
+        _assetsReadError = null;
+      });
+    }
+    if (article == null || repository == null) {
+      return;
+    }
+    final result = await _readAssets(repository, article.id);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      if (result.error == null) {
+        _assets = result.assets;
+      }
+      _assetsReadError = result.error;
+    });
+  }
+
   void _requestStandaloneNote() {
     final article = _article;
     if (article == null) {
       return;
     }
-    widget.onStandaloneNoteRequested?.call(
-      ReaderStandaloneNoteDraftRequest(articleId: article.id),
+    final request = ReaderStandaloneNoteDraftRequest(articleId: article.id);
+    final onStandaloneNoteRequested = widget.onStandaloneNoteRequested;
+    if (onStandaloneNoteRequested != null) {
+      onStandaloneNoteRequested(request);
+      return;
+    }
+    final repository = _assetRepository ?? _defaultAssetRepository();
+    if (repository == null) {
+      return;
+    }
+    unawaited(
+      ReadingAssetCardRequestPresenter(
+        repository: repository,
+      ).presentStandaloneNoteRequest(context, request: request),
     );
   }
 
