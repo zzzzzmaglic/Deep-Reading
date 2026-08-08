@@ -1,9 +1,11 @@
+import 'package:app/features/auth/data/anonymous_auth_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'core/router/app_router.dart';
 
-class DeepReadingApp extends StatelessWidget {
+class DeepReadingApp extends ConsumerWidget {
   const DeepReadingApp({super.key, this.router});
 
   DeepReadingApp.routerForTest(
@@ -21,10 +23,22 @@ class DeepReadingApp extends StatelessWidget {
   final GoRouter? router;
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp.router(
-      title: 'Deep Reading',
-      routerConfig: router ?? createAppRouter(),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bootstrap = ref.watch(anonymousAuthBootstrapProvider);
+
+    return bootstrap.when(
+      loading: () => const MaterialApp(
+        home: Scaffold(body: SizedBox(key: Key('app-bootstrap-loading'))),
+      ),
+      error: (error, stackTrace) => const MaterialApp(
+        home: Scaffold(
+          body: Center(child: Text('Unable to start Deep Reading')),
+        ),
+      ),
+      data: (_) => MaterialApp.router(
+        title: 'Deep Reading',
+        routerConfig: router ?? createAppRouter(),
+      ),
     );
   }
 }

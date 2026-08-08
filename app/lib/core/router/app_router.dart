@@ -8,6 +8,20 @@ class ReaderRouteContext {
 
   final ReaderOrigin origin;
   final String? anchorId;
+
+  static ReaderRouteContext fromRouteExtra(Object? extra) {
+    if (extra == null) {
+      return const ReaderRouteContext(origin: ReaderOrigin.feed);
+    }
+    if (extra is ReaderRouteContext) {
+      return extra;
+    }
+    throw ArgumentError.value(
+      extra,
+      'extra',
+      'Reader routes require a ReaderRouteContext.',
+    );
+  }
 }
 
 void replaceSummaryWithReader(
@@ -55,9 +69,7 @@ GoRouter createAppRouter({String initialLocation = '/', Object? initialExtra}) {
       GoRoute(
         path: '/reader/:articleId',
         builder: (context, state) {
-          final routeContext = state.extra is ReaderRouteContext
-              ? state.extra! as ReaderRouteContext
-              : const ReaderRouteContext(origin: ReaderOrigin.feed);
+          final routeContext = ReaderRouteContext.fromRouteExtra(state.extra);
           return ReaderRouteContractSurface(
             articleId: state.pathParameters['articleId']!,
             routeContext: routeContext,

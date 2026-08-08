@@ -157,6 +157,17 @@ class AppDatabase extends _$AppDatabase {
       });
     });
   }
+
+  Future<void> deleteArticle(String articleId) {
+    return transaction(() async {
+      await (delete(
+        cachedArticleBlocks,
+      )..where((row) => row.articleId.equals(articleId))).go();
+      await (delete(
+        cachedArticles,
+      )..where((row) => row.articleId.equals(articleId))).go();
+    });
+  }
 }
 
 QueryExecutor _openConnection() {
@@ -164,6 +175,15 @@ QueryExecutor _openConnection() {
 }
 
 typedef ArticleFetcher = Future<CachedArticle?> Function(String articleId);
+
+class ArticleNotFoundException implements Exception {
+  const ArticleNotFoundException(this.articleId);
+
+  final String articleId;
+
+  @override
+  String toString() => 'Article was not found: $articleId';
+}
 
 class ArticleCache {
   const ArticleCache(this.database, this.fetchArticle);
@@ -179,10 +199,14 @@ class ArticleCache {
 
     try {
       final refreshed = await fetchArticle(articleId);
-      if (refreshed != null) {
-        await database.replaceArticle(refreshed);
-        yield refreshed;
+      if (refreshed == null) {
+        throw ArticleNotFoundException(articleId);
       }
+      await database.replaceArticle(refreshed);
+      yield refreshed;
+    } on ArticleNotFoundException {
+      await database.deleteArticle(articleId);
+      rethrow;
     } catch (_) {
       if (cached == null) {
         rethrow;
@@ -218,7 +242,7 @@ class SupabaseArticleFetcher {
         .eq('id', articleId)
         .maybeSingle();
     if (articleRow == null) {
-      return null;
+      throw ArticleNotFoundException(articleId);
     }
 
     final blockRows = await _client

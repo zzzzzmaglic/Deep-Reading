@@ -1,4 +1,6 @@
+import 'package:app/app.dart';
 import 'package:app/features/auth/data/anonymous_auth_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -16,6 +18,46 @@ void main() {
     await AnonymousAuthService(client).ensureSession();
 
     expect(client.anonymousSignInCalls, 1);
+  });
+
+  testWidgets('app startup executes the anonymous bootstrap provider', (
+    tester,
+  ) async {
+    final client = FakeSupabaseClient.withoutSession();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          anonymousAuthServiceProvider.overrideWithValue(
+            AnonymousAuthService(client),
+          ),
+        ],
+        child: const DeepReadingApp(),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(client.anonymousSignInCalls, 1);
+  });
+
+  testWidgets('app startup preserves an existing session', (tester) async {
+    final client = FakeSupabaseClient.withSession();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          anonymousAuthServiceProvider.overrideWithValue(
+            AnonymousAuthService(client),
+          ),
+        ],
+        child: const DeepReadingApp(),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(client.anonymousSignInCalls, 0);
   });
 }
 
