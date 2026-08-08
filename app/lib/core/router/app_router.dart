@@ -1,0 +1,116 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+enum ReaderOrigin { feed, knowledge }
+
+class ReaderRouteContext {
+  const ReaderRouteContext({required this.origin, this.anchorId});
+
+  final ReaderOrigin origin;
+  final String? anchorId;
+}
+
+void replaceSummaryWithReader(
+  BuildContext context, {
+  required String articleId,
+  String? anchorId,
+}) {
+  context.pushReplacement(
+    '/reader/${Uri.encodeComponent(articleId)}',
+    extra: ReaderRouteContext(origin: ReaderOrigin.feed, anchorId: anchorId),
+  );
+}
+
+void replaceTagDetailWithReader(
+  BuildContext context, {
+  required String articleId,
+  String? anchorId,
+}) {
+  context.pushReplacement(
+    '/reader/${Uri.encodeComponent(articleId)}',
+    extra: ReaderRouteContext(
+      origin: ReaderOrigin.knowledge,
+      anchorId: anchorId,
+    ),
+  );
+}
+
+GoRouter createAppRouter({String initialLocation = '/', Object? initialExtra}) {
+  return GoRouter(
+    initialLocation: initialLocation,
+    initialExtra: initialExtra,
+    routes: <RouteBase>[
+      GoRoute(
+        path: '/',
+        builder: (context, state) {
+          return const Scaffold(body: Center(child: Text('Deep Reading')));
+        },
+      ),
+      GoRoute(
+        path: '/reader/:articleId/summary',
+        builder: (context, state) {
+          return _ContractSurface(label: 'Article summary');
+        },
+      ),
+      GoRoute(
+        path: '/reader/:articleId',
+        builder: (context, state) {
+          final routeContext = state.extra is ReaderRouteContext
+              ? state.extra! as ReaderRouteContext
+              : const ReaderRouteContext(origin: ReaderOrigin.feed);
+          return ReaderRouteContractSurface(
+            articleId: state.pathParameters['articleId']!,
+            routeContext: routeContext,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/knowledge',
+        builder: (context, state) => _ContractSurface(label: 'Knowledge'),
+      ),
+      GoRoute(
+        path: '/knowledge/collections/:collectionId',
+        builder: (context, state) => _ContractSurface(label: 'Collection'),
+      ),
+      GoRoute(
+        path: '/knowledge/tags/:tagId',
+        builder: (context, state) => _ContractSurface(label: 'Tag'),
+      ),
+    ],
+  );
+}
+
+class ReaderRouteContractSurface extends StatelessWidget {
+  const ReaderRouteContractSurface({
+    required this.articleId,
+    required this.routeContext,
+    super.key,
+  });
+
+  final String articleId;
+  final ReaderRouteContext routeContext;
+
+  @override
+  Widget build(BuildContext context) {
+    final anchorId = routeContext.anchorId;
+    return Scaffold(
+      body: Center(
+        child: SizedBox(
+          key: anchorId == null ? null : Key('reader-anchor-$anchorId'),
+          child: Text(articleId),
+        ),
+      ),
+    );
+  }
+}
+
+class _ContractSurface extends StatelessWidget {
+  const _ContractSurface({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(body: Center(child: Text(label)));
+  }
+}
