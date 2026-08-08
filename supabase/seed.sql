@@ -61,7 +61,7 @@ values
 insert into public.collections (id, name, description)
 values (
   '30000000-0000-0000-0000-000000000001',
-  '往期推送',
+  '往期推文',
   '深度阅读的已发布文章'
 );
 
