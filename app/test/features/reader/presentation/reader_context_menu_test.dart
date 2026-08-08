@@ -189,4 +189,17 @@ class _FakeReadingAssetRepository implements ReadingAssetRepository {
 
   @override
   Future<Tag> createTag({required String name}) => throw UnimplementedError();
+
+  @override
+  Future<ReadingAsset> saveReadingAsset({
+    required String assetId,
+    required String? noteContent,
+    required List<String> tagIds,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<ReadingAsset> createStandaloneNoteWithTags({
+    required String noteContent,
+    required List<String> tagIds,
+  }) => throw UnimplementedError();
 }

@@ -51,6 +51,15 @@ void main() {
       assetId: 'asset-1',
       noteContent: 'Linked note',
     );
+    await repository.saveReadingAsset(
+      assetId: 'asset-1',
+      noteContent: 'Linked note with tags',
+      tagIds: ['tag-1'],
+    );
+    await repository.createStandaloneNoteWithTags(
+      noteContent: 'Standalone thought with tags',
+      tagIds: ['tag-1'],
+    );
     await repository.setAssetTags(assetId: 'asset-1', tagIds: ['tag-1']);
     await repository.deleteReadingAsset('asset-1');
     await repository.upsertReadingProgress(
@@ -63,6 +72,8 @@ void main() {
       'create_highlight_asset',
       'create_standalone_note',
       'update_reading_asset',
+      'save_reading_asset',
+      'create_standalone_note_with_tags',
       'set_asset_tags',
       'delete_reading_asset',
       'upsert_reading_progress',
@@ -98,7 +109,9 @@ class _RecordingReadingAssetDataSource implements ReadingAssetRemoteDataSource {
     return switch (functionName) {
       'create_highlight_asset' ||
       'create_standalone_note' ||
-      'update_reading_asset' => 'asset-1',
+      'update_reading_asset' ||
+      'save_reading_asset' ||
+      'create_standalone_note_with_tags' => 'asset-1',
       'create_tag' => 'tag-1',
       'upsert_reading_progress' => 'progress-1',
       _ => null,

@@ -45,15 +45,16 @@ void main() {
     required ReadingAsset readingAsset,
     required _FakeRepository repository,
     VoidCallback? onClosed,
-    ValueChanged<ReadingAsset>? onHighlightRemoved,
+    Future<void> Function(ReadingAsset)? onDeleted,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
         home: ReadingAssetCard(
+          key: ValueKey('${readingAsset.id}:${readingAsset.noteContent}'),
           asset: readingAsset,
           repository: repository,
           onClosed: onClosed,
-          onHighlightRemoved: onHighlightRemoved,
+          onDeleted: onDeleted,
         ),
       ),
     );
@@ -65,7 +66,7 @@ void main() {
     final repository = _FakeRepository(asset());
     await pumpCard(tester, readingAsset: asset(), repository: repository);
     expect(find.text('A highlighted passage'), findsOneWidget);
-    expect(find.text('添加笔记内容'), findsOneWidget);
+    expect(find.byTooltip('添加笔记内容'), findsOneWidget);
 
     await pumpCard(
       tester,
@@ -141,7 +142,7 @@ void main() {
     final repository = _FakeRepository(asset());
     await pumpCard(tester, readingAsset: asset(), repository: repository);
 
-    await tester.tap(find.text('标签'));
+    await tester.tap(find.text('#标签'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Work'));
     await tester.tap(find.text('完成'));
@@ -156,19 +157,19 @@ void main() {
     final repository = _FakeRepository(asset());
     await pumpCard(tester, readingAsset: asset(), repository: repository);
 
-    await tester.tap(find.text('编辑'));
+    await tester.tap(find.byTooltip('编辑'));
     await tester.pump();
-    await tester.tap(find.text('标签'));
+    await tester.tap(find.text('#标签'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Work'));
     await tester.tap(find.text('完成'));
     await tester.pumpAndSettle();
 
     expect(repository.setTagCalls, isEmpty);
-    await tester.tap(find.text('完成编辑'));
+    await tester.tap(find.byTooltip('完成编辑'));
     await tester.pumpAndSettle();
 
-    expect(repository.setTagCalls, ['asset-1:locked']);
+    expect(repository.saveCalls, ['asset-1:null:locked']);
   });
 
   testWidgets(
@@ -191,7 +192,7 @@ void main() {
         repository: repository,
         onClosed: () => closed++,
       );
-      await tester.tap(find.text('编辑'));
+      await tester.tap(find.byTooltip('编辑'));
       await tester.pump();
       await tester.enterText(find.byType(TextField), 'Draft');
       await tester.tapAt(const Offset(2, 2));
@@ -210,7 +211,7 @@ void main() {
         tester,
         readingAsset: asset(),
         repository: repository,
-        onHighlightRemoved: (value) => removed = value,
+        onDeleted: (value) async => removed = value,
       );
 
       await tester.tap(find.byTooltip('删除'));
@@ -249,7 +250,7 @@ void main() {
     await tester.tap(find.text('＋ 新建标签'));
     await tester.pump();
     await tester.enterText(find.byType(TextField), 'New tag');
-    await tester.tap(find.text('完成'));
+    await tester.tap(find.byTooltip('创建标签'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('完成'));
 
@@ -262,6 +263,7 @@ class _FakeRepository implements ReadingAssetRepository {
 
   final ReadingAsset assetToReturn;
   final setTagCalls = <String>[];
+  final saveCalls = <String>[];
   final deletedIds = <String>[];
 
   @override
@@ -310,8 +312,24 @@ class _FakeRepository implements ReadingAssetRepository {
       throw UnimplementedError();
 
   @override
-  Future<List<Tag>> readTags() => Future.value(const []);
+  Future<List<Tag>> readTags() => Future.value(assetToReturn.tags);
 
   @override
   Future<Tag> createTag({required String name}) => throw UnimplementedError();
+
+  @override
+  Future<ReadingAsset> saveReadingAsset({
+    required String assetId,
+    required String? noteContent,
+    required List<String> tagIds,
+  }) async {
+    saveCalls.add('$assetId:$noteContent:${tagIds.join(',')}');
+    return assetToReturn;
+  }
+
+  @override
+  Future<ReadingAsset> createStandaloneNoteWithTags({
+    required String noteContent,
+    required List<String> tagIds,
+  }) => Future.value(assetToReturn);
 }

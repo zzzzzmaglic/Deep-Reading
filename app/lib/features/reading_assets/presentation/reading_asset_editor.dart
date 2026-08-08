@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 class ReadingAssetEditor extends StatefulWidget {
   const ReadingAssetEditor({
     required this.controller,
+    required this.focusNode,
+    required this.saving,
     required this.onOpenTags,
     required this.onSave,
     required this.onDelete,
@@ -13,7 +15,9 @@ class ReadingAssetEditor extends StatefulWidget {
   final AssetEditorController controller;
   final VoidCallback onOpenTags;
   final VoidCallback onSave;
-  final VoidCallback onDelete;
+  final FocusNode focusNode;
+  final bool saving;
+  final VoidCallback? onDelete;
 
   @override
   State<ReadingAssetEditor> createState() => _ReadingAssetEditorState();
@@ -37,7 +41,9 @@ class _ReadingAssetEditorState extends State<ReadingAssetEditor> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         TextField(
+          key: const ValueKey('asset-note-input'),
           autofocus: true,
+          focusNode: widget.focusNode,
           controller: _textController,
           minLines: 4,
           maxLines: 10,
@@ -53,15 +59,33 @@ class _ReadingAssetEditorState extends State<ReadingAssetEditor> {
             OutlinedButton.icon(
               onPressed: widget.onOpenTags,
               icon: const Icon(Icons.tag),
-              label: const Text('标签'),
+              label: const Text('#标签'),
             ),
             const Spacer(),
             IconButton(
               tooltip: '删除',
+              color: Colors.red,
               onPressed: widget.onDelete,
               icon: const Icon(Icons.delete_outline),
             ),
-            FilledButton(onPressed: widget.onSave, child: const Text('完成编辑')),
+            Container(
+              decoration: const BoxDecoration(
+                color: Colors.blue,
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                tooltip: '完成编辑',
+                color: Colors.white,
+                onPressed: widget.saving ? null : widget.onSave,
+                icon: widget.saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.check),
+              ),
+            ),
           ],
         ),
       ],

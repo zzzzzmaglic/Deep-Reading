@@ -95,17 +95,15 @@ class AssetEditorController {
   Future<ReadingAsset> save() async {
     final noteContent = _draft.noteContent.trim();
     final existingAsset = _draft.originalAsset;
-    final asset = existingAsset == null
-        ? await repository.createStandaloneNote(noteContent: noteContent)
-        : await repository.updateReadingAsset(
+    return existingAsset == null
+        ? repository.createStandaloneNoteWithTags(
+            noteContent: noteContent,
+            tagIds: _draft.selectedTagIds.toList(growable: false),
+          )
+        : repository.saveReadingAsset(
             assetId: existingAsset.id,
             noteContent: noteContent.isEmpty ? null : noteContent,
+            tagIds: _draft.selectedTagIds.toList(growable: false),
           );
-
-    await repository.setAssetTags(
-      assetId: asset.id,
-      tagIds: _draft.selectedTagIds.toList(growable: false),
-    );
-    return asset;
   }
 }

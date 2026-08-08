@@ -37,6 +37,17 @@ abstract interface class ReadingAssetRepository {
   Future<List<Tag>> readTags();
 
   Future<Tag> createTag({required String name});
+
+  Future<ReadingAsset> saveReadingAsset({
+    required String assetId,
+    required String? noteContent,
+    required List<String> tagIds,
+  });
+
+  Future<ReadingAsset> createStandaloneNoteWithTags({
+    required String noteContent,
+    required List<String> tagIds,
+  });
 }
 
 abstract interface class ReadingAssetRemoteDataSource {
@@ -207,6 +218,39 @@ class SupabaseReadingAssetRepository implements ReadingAssetRepository {
       (tag) => tag.id == tagId,
       orElse: () => throw StateError('RPC returned an unreadable tag.'),
     );
+  }
+
+  @override
+  Future<ReadingAsset> saveReadingAsset({
+    required String assetId,
+    required String? noteContent,
+    required List<String> tagIds,
+  }) async {
+    final savedAssetId =
+        await _dataSource.callRpc(
+              'save_reading_asset',
+              parameters: {
+                'p_asset_id': assetId,
+                'p_note_content': noteContent,
+                'p_tag_ids': tagIds,
+              },
+            )
+            as String;
+    return _readAsset(savedAssetId);
+  }
+
+  @override
+  Future<ReadingAsset> createStandaloneNoteWithTags({
+    required String noteContent,
+    required List<String> tagIds,
+  }) async {
+    final assetId =
+        await _dataSource.callRpc(
+              'create_standalone_note_with_tags',
+              parameters: {'p_note_content': noteContent, 'p_tag_ids': tagIds},
+            )
+            as String;
+    return _readAsset(assetId);
   }
 
   Future<ReadingAsset> _readAsset(String assetId) async {

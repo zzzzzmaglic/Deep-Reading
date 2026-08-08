@@ -337,6 +337,19 @@ class _FakeReadingAssetRepository implements ReadingAssetRepository {
     required String? blockId,
     required int utf16Offset,
   }) async {}
+
+  @override
+  Future<ReadingAsset> saveReadingAsset({
+    required String assetId,
+    required String? noteContent,
+    required List<String> tagIds,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<ReadingAsset> createStandaloneNoteWithTags({
+    required String noteContent,
+    required List<String> tagIds,
+  }) => throw UnimplementedError();
 }
 
 class _FakeArticleRepository implements ArticleRepository {

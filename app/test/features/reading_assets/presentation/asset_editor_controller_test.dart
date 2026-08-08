@@ -66,10 +66,7 @@ void main() {
     expect(repository.calls, isEmpty);
     await controller.save();
 
-    expect(repository.calls, [
-      'update:asset-1:A note',
-      'tags:asset-1:locked,tag-1',
-    ]);
+    expect(repository.calls, ['save:asset-1:A note:locked,tag-1']);
   });
 
   test(
@@ -95,8 +92,7 @@ void main() {
       expect(result.id, 'created-1');
       expect(result.kind, ReadingAssetKind.standaloneNote);
       expect(repository.calls, [
-        'create:Standalone thought',
-        'tags:created-1:locked,tag-1',
+        'create-with-tags:Standalone thought:locked,tag-1',
       ]);
     },
   );
@@ -163,4 +159,23 @@ class _FakeRepository implements ReadingAssetRepository {
 
   @override
   Future<Tag> createTag({required String name}) => throw UnimplementedError();
+
+  @override
+  Future<ReadingAsset> saveReadingAsset({
+    required String assetId,
+    required String? noteContent,
+    required List<String> tagIds,
+  }) async {
+    calls.add('save:$assetId:$noteContent:${tagIds.join(',')}');
+    return assetToReturn;
+  }
+
+  @override
+  Future<ReadingAsset> createStandaloneNoteWithTags({
+    required String noteContent,
+    required List<String> tagIds,
+  }) async {
+    calls.add('create-with-tags:$noteContent:${tagIds.join(',')}');
+    return assetToReturn;
+  }
 }
