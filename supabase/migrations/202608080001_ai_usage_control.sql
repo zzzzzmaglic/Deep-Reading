@@ -27,7 +27,7 @@ create table public.ai_global_token_windows (
 );
 
 create table public.ai_anonymous_hour_windows (
-  anonymous_user_id uuid not null references auth.users(id) on delete cascade,
+  anonymous_user_id uuid not null,
   window_start timestamptz not null,
   window_end timestamptz not null,
   request_count integer not null default 0 check (request_count >= 0),
@@ -39,7 +39,7 @@ create table public.ai_anonymous_hour_windows (
 
 create table public.ai_companion_reservations (
   id uuid primary key default gen_random_uuid(),
-  anonymous_user_id uuid not null references auth.users(id) on delete cascade,
+  anonymous_user_id uuid not null,
   hour_window_start timestamptz not null,
   day_window_start timestamptz not null,
   week_window_start timestamptz not null,
@@ -54,11 +54,17 @@ create table public.ai_companion_reservations (
   check (
     (settled_at is null and outcome is null and charged_output_tokens is null)
     or (settled_at is not null and outcome is not null and charged_output_tokens is not null)
-  )
+  ),
+  check (actual_output_tokens is null or actual_output_tokens <= estimated_output_tokens),
+  check (charged_output_tokens is null or charged_output_tokens <= estimated_output_tokens)
 );
 
 create index ai_companion_reservations_created_at_idx
 on public.ai_companion_reservations (created_at);
+
+create index ai_companion_reservations_unsettled_idx
+on public.ai_companion_reservations (reserved_at)
+where settled_at is null;
 
 create index ai_anonymous_hour_windows_created_at_idx
 on public.ai_anonymous_hour_windows (created_at);
@@ -250,6 +256,13 @@ begin
     return;
   end if;
 
+  if p_actual_output_tokens is not null
+      and p_actual_output_tokens > v_reservation.estimated_output_tokens then
+    raise exception using
+      errcode = '22023',
+      message = 'actual output tokens cannot exceed reserved estimate';
+  end if;
+
   charged_tokens := coalesce(p_actual_output_tokens, v_reservation.estimated_output_tokens);
 
   update public.ai_global_token_windows
@@ -282,6 +295,7 @@ create or replace function public.cleanup_ai_companion_usage(
   p_now timestamptz default now()
 )
 returns table (
+  reservations_reconciled bigint,
   reservations_deleted bigint,
   hour_windows_deleted bigint,
   global_windows_deleted bigint
@@ -290,7 +304,65 @@ language plpgsql
 security definer
 set search_path = pg_catalog, public
 as $$
+declare
+  v_reservation public.ai_companion_reservations%rowtype;
 begin
+  reservations_reconciled := 0;
+
+  -- Cleanup takes the same global-week, global-day, reservation lock order as settlement.
+  perform 1
+  from public.ai_global_token_windows
+  where window_kind = 'week'
+  order by window_start
+  for update;
+
+  perform 1
+  from public.ai_global_token_windows
+  where window_kind = 'day'
+  order by window_start
+  for update;
+
+  for v_reservation in
+    select reservation.*
+    from public.ai_companion_reservations as reservation
+    where reservation.settled_at is null
+      and reservation.reserved_at < p_now - interval '1 day'
+    order by
+      reservation.week_window_start,
+      reservation.day_window_start,
+      reservation.id
+    for update skip locked
+  loop
+    update public.ai_global_token_windows
+    set reserved_tokens = greatest(
+          0,
+          reserved_tokens - v_reservation.estimated_output_tokens
+        ),
+        consumed_tokens = consumed_tokens + v_reservation.estimated_output_tokens,
+        updated_at = p_now
+    where window_kind = 'week'
+      and window_start = v_reservation.week_window_start;
+
+    update public.ai_global_token_windows
+    set reserved_tokens = greatest(
+          0,
+          reserved_tokens - v_reservation.estimated_output_tokens
+        ),
+        consumed_tokens = consumed_tokens + v_reservation.estimated_output_tokens,
+        updated_at = p_now
+    where window_kind = 'day'
+      and window_start = v_reservation.day_window_start;
+
+    update public.ai_companion_reservations
+    set charged_output_tokens = estimated_output_tokens,
+        outcome = 'upstream_error',
+        settled_at = p_now,
+        updated_at = p_now
+    where id = v_reservation.id;
+
+    reservations_reconciled := reservations_reconciled + 1;
+  end loop;
+
   delete from public.ai_companion_reservations
   where created_at < p_now - interval '30 days';
   get diagnostics reservations_deleted = row_count;

@@ -165,6 +165,34 @@ Deno.test("large multi-block context preserves both anchor edges and neighbours"
   assert(context.length <= 12_000);
 });
 
+Deno.test("header-heavy anchored context never exceeds the hard character cap", () => {
+  const blocks = Array.from({ length: 1_500 }, (_, index) => ({
+    id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+    position: index + 1,
+    content: `extreme-${index}:${"x".repeat(20)}`,
+  }));
+  const context = buildArticleContext(blocks, {
+    startBlockId: blocks[600].id,
+    endBlockId: blocks[900].id,
+  });
+
+  assert(context.length <= 12_000, `context length was ${context.length}`);
+  for (const index of [599, 600, 900, 901]) {
+    assert(context.includes(`extreme-${index}:`), `context omitted extreme-${index}`);
+  }
+});
+
+Deno.test("a bounded single-block anchor is included exactly once", () => {
+  const blocks = blocksOf(20).map((block) => ({
+    ...block,
+    content: `${block.content}:${"x".repeat(5_000)}`,
+  }));
+  const context = buildArticleContext(blocks, anchorAt(10));
+
+  assertEquals(context.split("[Block 11 | id-10]").length - 1, 1);
+  assert(context.length <= 12_000);
+});
+
 Deno.test("selection explanations reject a missing anchor before external calls", async () => {
   const { calls, handler } = gatewayFixture();
   const events = await responseEvents(await handler(companionRequest("selection_explain")));
@@ -232,10 +260,40 @@ Deno.test("a rejected durable reservation never calls DeepSeek", async () => {
     reserveStatus: 400,
     reserveErrorCode: "PRA03",
   });
-  const events = await responseEvents(await handler(companionRequest()));
+  const response = await handler(companionRequest());
+  const events = await responseEvents(response);
 
+  assertEquals(response.status, 429);
   assertEquals(events.map((event) => event.event), ["error"]);
   assertEquals(events[0].data.code, "global_daily_budget");
+  assert(!calls.some((call) => call.url.includes("api.deepseek.com")));
+});
+
+Deno.test("reservation authorization failures map to typed HTTP 403", async () => {
+  const { calls, handler } = gatewayFixture({
+    reserveStatus: 400,
+    reserveErrorCode: "PRA01",
+  });
+  const response = await handler(companionRequest());
+  const events = await responseEvents(response);
+
+  assertEquals(response.status, 403);
+  assertEquals(events.map((event) => event.event), ["error"]);
+  assertEquals(events[0].data.code, "anonymous_auth_required");
+  assert(!calls.some((call) => call.url.includes("api.deepseek.com")));
+});
+
+Deno.test("unknown reservation failures map to a typed server error", async () => {
+  const { calls, handler } = gatewayFixture({
+    reserveStatus: 500,
+    reserveErrorCode: "40001",
+  });
+  const response = await handler(companionRequest());
+  const events = await responseEvents(response);
+
+  assertEquals(response.status, 502);
+  assertEquals(events.map((event) => event.event), ["error"]);
+  assertEquals(events[0].data.code, "usage_reservation_failed");
   assert(!calls.some((call) => call.url.includes("api.deepseek.com")));
 });
 

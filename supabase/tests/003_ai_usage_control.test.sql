@@ -1,6 +1,6 @@
 begin;
 
-select plan(13);
+select plan(23);
 
 insert into auth.users (id, aud, role, is_anonymous)
 values
@@ -200,6 +200,62 @@ reset role;
 truncate public.ai_companion_reservations,
   public.ai_anonymous_hour_windows,
   public.ai_global_token_windows;
+update public.ai_usage_policy
+set requests_per_hour = 20,
+    daily_token_budget = 10000,
+    weekly_token_budget = 20000
+where singleton;
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '66666666-6666-4666-8666-666666666666', true);
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"66666666-6666-4666-8666-666666666666","role":"authenticated","is_anonymous":true}',
+  true
+);
+select set_config(
+  'test.oversized_reservation_id',
+  (select reservation_id::text from public.reserve_ai_companion_usage(100)),
+  true
+);
+select throws_ok(
+  $$select * from public.settle_ai_companion_usage(
+    current_setting('test.oversized_reservation_id')::uuid,
+    101,
+    'completed'
+  )$$,
+  '22023',
+  'actual output tokens cannot exceed reserved estimate',
+  'settlement rejects output above the reserved estimate'
+);
+
+reset role;
+select is(
+  (
+    select reserved_tokens
+    from public.ai_global_token_windows
+    where window_kind = 'day'
+  ),
+  100::bigint,
+  'rejected oversized settlement leaves global counters unchanged'
+);
+select is(
+  (
+    select count(*)
+    from public.ai_companion_reservations
+    where id = current_setting('test.oversized_reservation_id')::uuid
+      and settled_at is null
+      and actual_output_tokens is null
+      and charged_output_tokens is null
+      and outcome is null
+  ),
+  1::bigint,
+  'rejected oversized settlement leaves its reservation unsettled'
+);
+
+reset role;
+truncate public.ai_companion_reservations,
+  public.ai_anonymous_hour_windows,
+  public.ai_global_token_windows;
 insert into public.ai_anonymous_hour_windows (
   anonymous_user_id,
   window_start,
@@ -243,6 +299,127 @@ select is(
   ),
   1::bigint,
   'cleanup preserves use-control rows within 30 days'
+);
+
+truncate public.ai_companion_reservations,
+  public.ai_anonymous_hour_windows,
+  public.ai_global_token_windows;
+update public.ai_usage_policy
+set requests_per_hour = 20,
+    daily_token_budget = 10000,
+    weekly_token_budget = 20000
+where singleton;
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '77777777-7777-4777-8777-777777777777', true);
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"77777777-7777-4777-8777-777777777777","role":"authenticated","is_anonymous":true}',
+  true
+);
+select set_config(
+  'test.deleted_user_reservation_id',
+  (select reservation_id::text from public.reserve_ai_companion_usage(80)),
+  true
+);
+
+reset role;
+delete from auth.users
+where id = '77777777-7777-4777-8777-777777777777';
+select is(
+  (
+    select count(*)
+    from public.ai_companion_reservations
+    where id = current_setting('test.deleted_user_reservation_id')::uuid
+  ),
+  1::bigint,
+  'deleting an anonymous account preserves its live reservation'
+);
+select is(
+  (
+    select count(*)
+    from public.ai_anonymous_hour_windows
+    where anonymous_user_id = '77777777-7777-4777-8777-777777777777'
+  ),
+  1::bigint,
+  'deleting an anonymous account preserves its hourly use-control record'
+);
+select is(
+  (
+    select reserved_tokens
+    from public.ai_global_token_windows
+    where window_kind = 'day'
+  ),
+  80::bigint,
+  'account deletion cannot strand counters by erasing the reservation record'
+);
+
+update public.ai_companion_reservations
+set reserved_at = '2026-08-06 00:00:00+00'
+where id = current_setting('test.deleted_user_reservation_id')::uuid;
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '66666666-6666-4666-8666-666666666666', true);
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"66666666-6666-4666-8666-666666666666","role":"authenticated","is_anonymous":true}',
+  true
+);
+select set_config(
+  'test.recent_reservation_id',
+  (select reservation_id::text from public.reserve_ai_companion_usage(30)),
+  true
+);
+
+reset role;
+select * from public.cleanup_ai_companion_usage('2026-08-08 00:00:00+00');
+select is(
+  (
+    select count(*)
+    from public.ai_companion_reservations
+    where id = current_setting('test.deleted_user_reservation_id')::uuid
+      and settled_at = '2026-08-08 00:00:00+00'
+      and charged_output_tokens = 80
+      and outcome = 'upstream_error'
+  ),
+  1::bigint,
+  'cleanup conservatively settles expired reservations and retains them for audit'
+);
+select is(
+  (
+    select count(*)
+    from public.ai_global_token_windows
+    where window_kind = 'day'
+      and reserved_tokens = 30
+      and consumed_tokens = 80
+  ),
+  1::bigint,
+  'expired reconciliation releases reserved tokens into consumed usage'
+);
+select is(
+  (
+    select count(*)
+    from public.ai_companion_reservations
+    where id = current_setting('test.recent_reservation_id')::uuid
+      and settled_at is null
+      and charged_output_tokens is null
+  ),
+  1::bigint,
+  'cleanup leaves recent in-flight reservations untouched'
+);
+select ok(
+  (
+    with cleanup_definition as (
+      select pg_get_functiondef(
+        'public.cleanup_ai_companion_usage(timestamptz)'::regprocedure
+      ) as sql
+    )
+    select position('where window_kind = ''week''' in sql) > 0
+      and position('where window_kind = ''week''' in sql)
+        < position('where window_kind = ''day''' in sql)
+      and position('where window_kind = ''day''' in sql)
+        < position('for update skip locked' in sql)
+    from cleanup_definition
+  ),
+  'cleanup declares global week, global day, then skip-locked reservation order'
 );
 
 select * from finish();

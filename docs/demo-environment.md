@@ -39,7 +39,8 @@ the global week, global day, and anonymous-user hour counters in that stable ord
 limits, and reserves the configured maximum output before DeepSeek is called.
 `settle_ai_companion_usage` records known output usage and releases the unused reservation. When
 usage is unavailable after cancellation or upstream failure, settlement charges the reserved
-maximum conservatively.
+maximum conservatively. Settlement cannot charge more than its reservation estimate. Anonymous
+account deletion does not erase pseudonymous usage-control rows or strand reserved global tokens.
 
 The singleton `public.ai_usage_policy` row defaults to the Demo example values above. Update that row
 through an administrator-only migration or SQL deployment step when changing quotas, and update the
@@ -50,7 +51,9 @@ drift. Do not grant clients access to the policy or usage-control tables.
 Usage-control records contain only anonymous user ID, window boundaries, counters,
 reservation/settlement outcome, and timestamps. They never contain article, question, note, prompt,
 or model-response text. The migration schedules `ai-companion-usage-cleanup-daily` through `pg_cron`
-at 03:17 UTC; it deletes only use-control records older than 30 days.
+at 03:17 UTC. Cleanup locks global week rows, global day rows, then reservations; it conservatively
+settles reservations still unresolved after one day, skips any row locked by in-flight work, and
+deletes only use-control records older than 30 days.
 
 ## Local verification
 

@@ -331,16 +331,17 @@ export function createAiCompanionHandler(
       );
       if (!reserveResponse.ok) {
         const failure = await reserveResponse.json().catch(() => ({})) as { code?: string };
-        const mapped = {
-          PRA01: ["anonymous_auth_required", "auth_rejected"],
-          PRA02: ["hourly_request_limit", "hourly_limit_reached"],
-          PRA03: ["global_daily_budget", "daily_budget_exhausted"],
-          PRA04: ["global_weekly_budget", "weekly_budget_exhausted"],
-        }[failure.code ?? ""];
+        const mappings: Record<string, { code: string; status: number; logCode: string }> = {
+          PRA01: { code: "anonymous_auth_required", status: 403, logCode: "auth_rejected" },
+          PRA02: { code: "hourly_request_limit", status: 429, logCode: "hourly_limit_reached" },
+          PRA03: { code: "global_daily_budget", status: 429, logCode: "daily_budget_exhausted" },
+          PRA04: { code: "global_weekly_budget", status: 429, logCode: "weekly_budget_exhausted" },
+        };
+        const mapped = mappings[failure.code ?? ""];
         throw new GatewayError(
-          mapped?.[0] ?? "usage_reservation_failed",
-          429,
-          mapped?.[1] ?? "reservation_failed",
+          mapped?.code ?? "usage_reservation_failed",
+          mapped?.status ?? 502,
+          mapped?.logCode ?? "reservation_failed",
         );
       }
       const reservationPayload = await reserveResponse.json() as Reservation[] | Reservation;
