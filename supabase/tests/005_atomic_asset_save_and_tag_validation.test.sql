@@ -5,11 +5,11 @@ select plan(10);
 insert into auth.users (id, aud, role, is_anonymous)
 values ('66666666-6666-6666-6666-666666666666', 'authenticated', 'authenticated', true);
 
-set local role authenticated;
-select set_config('request.jwt.claim.sub', '66666666-6666-6666-6666-666666666666', true);
-
 insert into public.tags (id, owner_id, name)
 values ('77777777-7777-7777-7777-777777777777', '66666666-6666-6666-6666-666666666666', 'Existing user tag');
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '66666666-6666-6666-6666-666666666666', true);
 
 select set_config(
   'test.atomic_asset_id',
@@ -75,7 +75,7 @@ select throws_ok(
   'create_tag rejects names longer than 48 characters'
 );
 select throws_ok(
-  E$$select public.create_tag('line\nbreak')$$,
+  $$select public.create_tag(E'line\nbreak')$$,
   '22023',
   'tag name contains control characters',
   'create_tag rejects control characters'
