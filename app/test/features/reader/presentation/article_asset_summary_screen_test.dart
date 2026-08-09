@@ -5,6 +5,7 @@ import 'package:app/features/reading_assets/data/reading_asset_repository.dart';
 import 'package:app/features/reading_assets/domain/reading_asset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 void main() {
   test(
@@ -72,6 +73,50 @@ void main() {
     expect(readerContext?.origin, ReaderOrigin.feed);
   });
 
+  testWidgets(
+    'show in article does not leave the summary on the return stack',
+    (tester) async {
+      final repository = _FakeSummaryRepository(assets: [_anchoredAsset()]);
+      final router = GoRouter(
+        initialLocation: '/',
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (context, state) => Scaffold(
+              body: TextButton(
+                onPressed: () => context.push('/reader/article-1/summary'),
+                child: const Text('Open summary'),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/reader/:articleId/summary',
+            builder: (context, state) => ArticleAssetSummaryScreen(
+              articleId: state.pathParameters['articleId']!,
+              repository: repository,
+            ),
+          ),
+          GoRoute(
+            path: '/reader/:articleId',
+            builder: (context, state) => const Scaffold(body: Text('reader')),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.tap(find.text('Open summary'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('在文中显示'));
+      await tester.pumpAndSettle();
+
+      router.pop();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Open summary'), findsOneWidget);
+      expect(find.byType(ArticleAssetSummaryScreen), findsNothing);
+    },
+  );
+
   testWidgets('right swipe selects an asset and exposes destructive action', (
     tester,
   ) async {
@@ -125,6 +170,96 @@ void main() {
     expect(repository.deletedIds, ['a1']);
     expect(find.byKey(const ValueKey('summary-asset-a1')), findsNothing);
   });
+
+  testWidgets('refresh failure after deletion is visible with stale assets', (
+    tester,
+  ) async {
+    final repository = _FakeSummaryRepository(assets: [_standaloneAsset('a1')]);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ArticleAssetSummaryScreen(
+          articleId: 'article-1',
+          repository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    repository.readFailuresRemaining = 1;
+
+    await tester.fling(
+      find.byKey(const ValueKey('summary-asset-a1')),
+      const Offset(600, 0),
+      1000,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('article-summary-delete')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确认'));
+    await tester.pumpAndSettle();
+
+    expect(repository.deletedIds, ['a1']);
+    expect(find.byKey(const ValueKey('summary-asset-a1')), findsOneWidget);
+    expect(find.text('标注与笔记加载失败'), findsOneWidget);
+    expect(find.text('重试'), findsOneWidget);
+  });
+
+  testWidgets('saving an asset refreshes the summary', (tester) async {
+    final repository = _FakeSummaryRepository(assets: [_standaloneAsset('a1')]);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ArticleAssetSummaryScreen(
+          articleId: 'article-1',
+          repository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('summary-asset-a1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('编辑'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('asset-note-input')),
+      'Updated standalone note',
+    );
+    await tester.tap(find.byTooltip('完成编辑'));
+    await tester.pumpAndSettle();
+
+    expect(repository.readCalls, 2);
+    expect(find.text('Updated standalone note'), findsOneWidget);
+  });
+
+  testWidgets('save refresh failure is surfaced in the summary', (
+    tester,
+  ) async {
+    final repository = _FakeSummaryRepository(assets: [_standaloneAsset('a1')]);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ArticleAssetSummaryScreen(
+          articleId: 'article-1',
+          repository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('summary-asset-a1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('编辑'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('asset-note-input')),
+      'Updated standalone note',
+    );
+    repository.readFailuresRemaining = 1;
+    await tester.tap(find.byTooltip('完成编辑'));
+    await tester.pumpAndSettle();
+
+    expect(repository.readCalls, 2);
+    expect(find.text('标注与笔记加载失败'), findsOneWidget);
+    expect(find.text('重试'), findsOneWidget);
+  });
 }
 
 ReadingAsset _anchoredAsset() => const ReadingAsset(
@@ -161,10 +296,15 @@ class _FakeSummaryRepository implements ReadingAssetRepository {
   final List<String> deletedIds = [];
   int readCalls = 0;
   String? failOnDelete;
+  int readFailuresRemaining = 0;
 
   @override
   Future<List<ReadingAsset>> readAssets({String? articleId}) async {
     readCalls++;
+    if (readFailuresRemaining > 0) {
+      readFailuresRemaining--;
+      throw StateError('read failed');
+    }
     return List<ReadingAsset>.of(assets);
   }
 
@@ -212,7 +352,7 @@ class _FakeSummaryRepository implements ReadingAssetRepository {
   }) => throw UnimplementedError();
 
   @override
-  Future<List<Tag>> readTags() => throw UnimplementedError();
+  Future<List<Tag>> readTags() => Future.value(const []);
 
   @override
   Future<Tag> createTag({required String name}) => throw UnimplementedError();
@@ -222,7 +362,20 @@ class _FakeSummaryRepository implements ReadingAssetRepository {
     required String assetId,
     required String? noteContent,
     required List<String> tagIds,
-  }) => throw UnimplementedError();
+  }) async {
+    final index = assets.indexWhere((asset) => asset.id == assetId);
+    final existing = assets[index];
+    final saved = ReadingAsset(
+      id: existing.id,
+      ownerId: existing.ownerId,
+      articleId: existing.articleId,
+      anchor: existing.anchor,
+      noteContent: noteContent,
+      tags: existing.tags,
+    );
+    assets[index] = saved;
+    return saved;
+  }
 
   @override
   Future<ReadingAsset> createStandaloneNoteWithTags({

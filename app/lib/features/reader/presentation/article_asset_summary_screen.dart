@@ -81,6 +81,18 @@ class _ArticleAssetSummaryScreenState extends State<ArticleAssetSummaryScreen> {
     }
     return Column(
       children: [
+        if (_controller.error != null)
+          MaterialBanner(
+            content: const Text(
+              '\u6807\u6ce8\u4e0e\u7b14\u8bb0\u52a0\u8f7d\u5931\u8d25',
+            ),
+            actions: [
+              TextButton(
+                onPressed: _controller.load,
+                child: const Text('\u91cd\u8bd5'),
+              ),
+            ],
+          ),
         if (_actionError != null)
           MaterialBanner(
             content: Text(_actionError!),
@@ -183,6 +195,7 @@ class _ArticleAssetSummaryScreenState extends State<ArticleAssetSummaryScreen> {
         asset: asset,
         repository: widget.repository,
         onClosed: () => Navigator.of(dialogContext).pop(),
+        onSaved: (_) => _controller.load(),
         onDeleted: (_) => _controller.load(),
       ),
     );
