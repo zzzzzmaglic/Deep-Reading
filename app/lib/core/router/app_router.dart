@@ -1,6 +1,9 @@
+import 'package:app/features/reader/presentation/article_asset_summary_screen.dart';
 import 'package:app/features/reader/presentation/reader_screen.dart';
+import 'package:app/features/reading_assets/data/reading_asset_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 enum ReaderOrigin { feed, knowledge }
 
@@ -57,6 +60,7 @@ GoRouter createAppRouter({
   String initialLocation = '/',
   Object? initialExtra,
   ReaderScreenBuilder? readerScreenBuilder,
+  ReadingAssetRepository? readingAssetRepository,
 }) {
   return GoRouter(
     initialLocation: initialLocation,
@@ -71,7 +75,15 @@ GoRouter createAppRouter({
       GoRoute(
         path: '/reader/:articleId/summary',
         builder: (context, state) {
-          return _ContractSurface(label: 'Article summary');
+          final repository =
+              readingAssetRepository ?? _tryDefaultAssetRepository();
+          if (repository == null) {
+            return _ContractSurface(label: 'Article summary');
+          }
+          return ArticleAssetSummaryScreen(
+            articleId: state.pathParameters['articleId']!,
+            repository: repository,
+          );
         },
       ),
       GoRoute(
@@ -102,6 +114,14 @@ GoRouter createAppRouter({
       ),
     ],
   );
+}
+
+ReadingAssetRepository? _tryDefaultAssetRepository() {
+  try {
+    return SupabaseReadingAssetRepository(Supabase.instance.client);
+  } catch (_) {
+    return null;
+  }
 }
 
 class _ContractSurface extends StatelessWidget {

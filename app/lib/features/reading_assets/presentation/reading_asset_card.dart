@@ -56,6 +56,7 @@ class ReadingAssetCardRequestPresenter {
     await _show(
       context,
       draft: AssetEditorDraft.newStandalone(
+        articleId: request.articleId,
         initialTagIds: {
           for (final tag in tags)
             if (tag.isSystem) tag.id,
@@ -439,6 +440,7 @@ class _ReadingAssetCardState extends State<ReadingAssetCard> {
   ReadingAsset _copy(ReadingAsset asset, List<Tag> tags) => ReadingAsset(
     id: asset.id,
     ownerId: asset.ownerId,
+    articleId: asset.articleId,
     anchor: asset.anchor,
     noteContent: asset.noteContent,
     tags: List.unmodifiable(tags),

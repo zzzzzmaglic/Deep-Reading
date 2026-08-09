@@ -105,7 +105,9 @@ void main() {
       await tester.tap(find.byTooltip('完成编辑'));
       await tester.pumpAndSettle();
 
-      expect(repository.createStandaloneWithTagsCalls, ['Standalone:locked']);
+      expect(repository.createStandaloneWithTagsCalls, [
+        'Standalone:locked:article-1',
+      ]);
     },
   );
 
@@ -459,8 +461,11 @@ class _ReviewRepository implements ReadingAssetRepository {
   Future<ReadingAsset> createStandaloneNoteWithTags({
     required String noteContent,
     required List<String> tagIds,
+    String? articleId,
   }) async {
-    createStandaloneWithTagsCalls.add('$noteContent:${tagIds.join(',')}');
+    createStandaloneWithTagsCalls.add(
+      '$noteContent:${tagIds.join(',')}:${articleId ?? ''}',
+    );
     return ReadingAsset(
       id: 'standalone-1',
       ownerId: 'owner',
@@ -503,8 +508,10 @@ class _ReviewRepository implements ReadingAssetRepository {
   }
 
   @override
-  Future<ReadingAsset> createStandaloneNote({required String noteContent}) =>
-      throw UnimplementedError();
+  Future<ReadingAsset> createStandaloneNote({
+    required String noteContent,
+    String? articleId,
+  }) => throw UnimplementedError();
   @override
   Future<Tag> createTag({required String name}) => throw UnimplementedError();
   @override

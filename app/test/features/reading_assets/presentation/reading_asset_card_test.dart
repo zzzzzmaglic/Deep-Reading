@@ -278,8 +278,10 @@ class _FakeRepository implements ReadingAssetRepository {
   }) => throw UnimplementedError();
 
   @override
-  Future<ReadingAsset> createStandaloneNote({required String noteContent}) =>
-      Future.value(assetToReturn);
+  Future<ReadingAsset> createStandaloneNote({
+    required String noteContent,
+    String? articleId,
+  }) => Future.value(assetToReturn);
 
   @override
   Future<ReadingAsset> updateReadingAsset({
@@ -331,5 +333,6 @@ class _FakeRepository implements ReadingAssetRepository {
   Future<ReadingAsset> createStandaloneNoteWithTags({
     required String noteContent,
     required List<String> tagIds,
+    String? articleId,
   }) => Future.value(assetToReturn);
 }

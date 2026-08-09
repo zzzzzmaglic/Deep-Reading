@@ -5,6 +5,7 @@ class AssetEditorDraft {
   AssetEditorDraft({
     required this.originalAsset,
     required this.noteContent,
+    this.articleId,
     required Set<String> selectedTagIds,
   }) : selectedTagIds = Set.unmodifiable(selectedTagIds),
        _originalNoteContent = originalAsset?.noteContent ?? '',
@@ -16,22 +17,26 @@ class AssetEditorDraft {
     return AssetEditorDraft(
       originalAsset: asset,
       noteContent: asset.noteContent ?? '',
+      articleId: asset.articleId,
       selectedTagIds: asset.tags.map((tag) => tag.id).toSet(),
     );
   }
 
   factory AssetEditorDraft.newStandalone({
     Set<String> initialTagIds = const {},
+    String? articleId,
   }) {
     return AssetEditorDraft(
       originalAsset: null,
       noteContent: '',
+      articleId: articleId,
       selectedTagIds: initialTagIds,
     );
   }
 
   final ReadingAsset? originalAsset;
   final String noteContent;
+  final String? articleId;
   final Set<String> selectedTagIds;
   final String _originalNoteContent;
   final Set<String> _originalTagIds;
@@ -51,6 +56,7 @@ class AssetEditorDraft {
     return AssetEditorDraft(
       originalAsset: originalAsset,
       noteContent: value,
+      articleId: articleId,
       selectedTagIds: selectedTagIds,
     );
   }
@@ -59,6 +65,7 @@ class AssetEditorDraft {
     return AssetEditorDraft(
       originalAsset: originalAsset,
       noteContent: noteContent,
+      articleId: articleId,
       selectedTagIds: ids,
     );
   }
@@ -103,6 +110,7 @@ class AssetEditorController {
         ? repository.createStandaloneNoteWithTags(
             noteContent: noteContent,
             tagIds: _draft.selectedTagIds.toList(growable: false),
+            articleId: _draft.articleId,
           )
         : repository.saveReadingAsset(
             assetId: existingAsset.id,

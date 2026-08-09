@@ -12,7 +12,10 @@ abstract interface class ReadingAssetRepository {
     required String contentChecksum,
   });
 
-  Future<ReadingAsset> createStandaloneNote({required String noteContent});
+  Future<ReadingAsset> createStandaloneNote({
+    required String noteContent,
+    String? articleId,
+  });
 
   Future<ReadingAsset> updateReadingAsset({
     required String assetId,
@@ -47,6 +50,7 @@ abstract interface class ReadingAssetRepository {
   Future<ReadingAsset> createStandaloneNoteWithTags({
     required String noteContent,
     required List<String> tagIds,
+    String? articleId,
   });
 }
 
@@ -102,11 +106,15 @@ class SupabaseReadingAssetRepository implements ReadingAssetRepository {
   @override
   Future<ReadingAsset> createStandaloneNote({
     required String noteContent,
+    String? articleId,
   }) async {
     final assetId =
         await _dataSource.callRpc(
               'create_standalone_note',
-              parameters: {'p_note_content': noteContent},
+              parameters: {
+                'p_note_content': noteContent,
+                'p_article_id': articleId,
+              },
             )
             as String;
 
@@ -197,7 +205,10 @@ class SupabaseReadingAssetRepository implements ReadingAssetRepository {
           ),
         )
         .where(
-          (asset) => articleId == null || asset.anchor?.articleId == articleId,
+          (asset) =>
+              articleId == null ||
+              asset.anchor?.articleId == articleId ||
+              (asset.anchor == null && asset.articleId == articleId),
         )
         .toList(growable: false);
   }
@@ -243,11 +254,16 @@ class SupabaseReadingAssetRepository implements ReadingAssetRepository {
   Future<ReadingAsset> createStandaloneNoteWithTags({
     required String noteContent,
     required List<String> tagIds,
+    String? articleId,
   }) async {
     final assetId =
         await _dataSource.callRpc(
               'create_standalone_note_with_tags',
-              parameters: {'p_note_content': noteContent, 'p_tag_ids': tagIds},
+              parameters: {
+                'p_note_content': noteContent,
+                'p_article_id': articleId,
+                'p_tag_ids': tagIds,
+              },
             )
             as String;
     return _readAsset(assetId);
@@ -292,6 +308,7 @@ class SupabaseReadingAssetRepository implements ReadingAssetRepository {
     return ReadingAsset(
       id: json['id'] as String,
       ownerId: json['owner_id'] as String,
+      articleId: json['article_id'] as String?,
       anchor: anchor,
       noteContent: json['note_content'] as String?,
       tags: List.unmodifiable(tags),

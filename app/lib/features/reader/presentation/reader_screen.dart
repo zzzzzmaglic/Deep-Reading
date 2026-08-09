@@ -13,6 +13,7 @@ import 'package:app/features/reading_assets/domain/reading_asset.dart';
 import 'package:app/features/reading_assets/presentation/reading_asset_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 export 'reader_style_sheet.dart';
@@ -387,6 +388,18 @@ class _ReaderScreenState extends State<ReaderScreen> {
                   tooltip: 'Back',
                   icon: const Icon(Icons.arrow_back),
                   onPressed: () => Navigator.of(context).maybePop(),
+                ),
+              ),
+              Positioned(
+                top: 8,
+                right: 12,
+                child: IconButton(
+                  key: const Key('reader-asset-summary'),
+                  tooltip: '标注与笔记',
+                  icon: const Icon(Icons.bookmarks_outlined),
+                  onPressed: () => context.push(
+                    '/reader/${Uri.encodeComponent(widget.articleId)}/summary',
+                  ),
                 ),
               ),
               Positioned(

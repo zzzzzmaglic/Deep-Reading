@@ -118,6 +118,7 @@ class _FakeRepository implements ReadingAssetRepository {
   @override
   Future<ReadingAsset> createStandaloneNote({
     required String noteContent,
+    String? articleId,
   }) async {
     calls.add('create:$noteContent');
     return assetToReturn;
@@ -174,6 +175,7 @@ class _FakeRepository implements ReadingAssetRepository {
   Future<ReadingAsset> createStandaloneNoteWithTags({
     required String noteContent,
     required List<String> tagIds,
+    String? articleId,
   }) async {
     calls.add('create-with-tags:$noteContent:${tagIds.join(',')}');
     return assetToReturn;

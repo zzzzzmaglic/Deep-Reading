@@ -42,6 +42,7 @@ class ReadingAsset {
   const ReadingAsset({
     required this.id,
     required this.ownerId,
+    this.articleId,
     required this.anchor,
     required this.noteContent,
     required this.tags,
@@ -49,9 +50,12 @@ class ReadingAsset {
 
   final String id;
   final String ownerId;
+  final String? articleId;
   final TextAnchor? anchor;
   final String? noteContent;
   final List<Tag> tags;
+
+  String? get associatedArticleId => articleId ?? anchor?.articleId;
 
   ReadingAssetKind get kind =>
       deriveReadingAssetKind(anchor: anchor, noteContent: noteContent);

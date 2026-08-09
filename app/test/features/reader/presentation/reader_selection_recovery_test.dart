@@ -473,8 +473,10 @@ class _FakeReadingAssetRepository implements ReadingAssetRepository {
   }
 
   @override
-  Future<ReadingAsset> createStandaloneNote({required String noteContent}) =>
-      throw UnimplementedError();
+  Future<ReadingAsset> createStandaloneNote({
+    required String noteContent,
+    String? articleId,
+  }) => throw UnimplementedError();
 
   @override
   Future<void> deleteReadingAsset(String assetId) async {
@@ -537,6 +539,7 @@ class _FakeReadingAssetRepository implements ReadingAssetRepository {
   Future<ReadingAsset> createStandaloneNoteWithTags({
     required String noteContent,
     required List<String> tagIds,
+    String? articleId,
   }) async {
     createdStandaloneNotes.add(noteContent);
     return ReadingAsset(
