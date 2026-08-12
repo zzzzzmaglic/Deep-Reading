@@ -42,5 +42,4 @@ debug.log
 # Local design backups are delivery artifacts, not source
 Figma UX Version Local Copy/
 
-# PRD prototype images remain local
-image*.png
+# PRD prototype images are tracked source assets under assets/images/

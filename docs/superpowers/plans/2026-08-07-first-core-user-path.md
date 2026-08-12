@@ -212,6 +212,8 @@ git commit -m "feat: add atomic reading asset RPC operations"
 ### Task 4: Implement the AI gateway with streamed, bounded current-article context
 
 **Files:**
+- Create: `supabase/migrations/202608080001_ai_usage_control.sql`
+- Create: `supabase/tests/003_ai_usage_control.test.sql`
 - Create: `supabase/functions/ai-companion/index.ts`
 - Create: `supabase/functions/ai-companion/context.ts`
 - Create: `supabase/functions/ai-companion/context_test.ts`
@@ -222,6 +224,7 @@ git commit -m "feat: add atomic reading asset RPC operations"
 - Accepts `POST /functions/v1/ai-companion` body `{ articleId, requestType, question, anchor? }`.
 - Emits SSE events `started`, `delta`, `completed`, and `error`.
 - Produces `buildArticleContext(articleBlocks, anchor)` using full text for short articles and a bounded anchor-neighbourhood for long articles.
+- Produces `reserve_ai_companion_usage(estimatedOutputTokens)` and `settle_ai_companion_usage(reservationId, actualOutputTokens, outcome)` RPCs. Both derive the caller from the JWT and reject non-anonymous identities.
 
 - [ ] **Step 1: Write the context-boundary test**
 
@@ -235,29 +238,35 @@ Deno.test('long article context contains the selected block and neighbours only'
 });
 ```
 
+In `supabase/tests/003_ai_usage_control.test.sql`, add assertions that the `(hour, anonymous user)` request limit rejects the next request, the global day/week budget rejects another user after budget exhaustion, settlement releases unused reserved tokens, and cleanup removes only records older than 30 days.
+
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `deno test supabase/functions/ai-companion/context_test.ts`
+Run: `supabase db reset && supabase test db && deno test supabase/functions/ai-companion/context_test.ts`
 
-Expected: FAIL because the context module has not been created.
+Expected: FAIL because the persistent AI-use tables/RPCs and context module have not been created.
 
 - [ ] **Step 3: Implement the Edge Function and abuse controls**
 
-Validate the caller JWT with Supabase Auth, fetch article blocks server-side by `articleId`, and ignore any article text supplied by the client. Validate `requestType` against `question`, `selection_explain`, `highlight_explain`, and `preset_term_explain`. Enforce a per-anonymous-user request window, maximum output token count, and deployment feature switch before calling DeepSeek.
+Validate the caller JWT with Supabase Auth, require its `is_anonymous` claim to be `true`, fetch article blocks server-side by `articleId`, and ignore any article text supplied by the client. Validate `requestType` against `question`, `selection_explain`, `highlight_explain`, and `preset_term_explain`. Reject every non-anonymous caller before an AI reservation or model call.
 
-Call DeepSeek-V4-Pro with `stream: true`; use environment variables `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL=DeepSeek-V4-Pro`, `AI_ENABLED`, `AI_MAX_OUTPUT_TOKENS`, and `AI_REQUESTS_PER_HOUR`. Transform upstream chunks to only the four declared event names, forward cancellation through `AbortController`, and never emit model reasoning. Log only anonymous request ID, status/error code, elapsed time, token count, and budget event.
+Create the persistent AI-use migration with a reservation table and window counters for the anonymous-user hourly request limit and global day/week token budgets. Store only anonymous user ID, window boundaries, request/token counters, reservation/settlement outcome, and timestamps. Do not store article text, question text, note text, or AI message text. Implement `reserve_ai_companion_usage` as one server-side atomic RPC: it locks or creates the three counters in a stable order, checks all limits, and records the reservation before any upstream request. Implement `settle_ai_companion_usage` as one atomic RPC: it records actual known usage and releases unused reserved allowance after completion, stop, or upstream failure; if upstream usage is unavailable, settle conservatively at the reserved maximum. Add a scheduled daily cleanup that deletes only expired use-control rows after 30 days.
+
+The Edge Function must call the reserve RPC with the caller JWT before invoking DeepSeek and call settlement in a `finally` path. A failed reservation returns a typed rate-limit or budget error without contacting DeepSeek. Set `enable_anonymous_sign_ins = true` in `supabase/config.toml`; document the required project setting, CAPTCHA/Turnstile, quota environment variables, retention cleanup, and AI feature switch in `docs/demo-environment.md`.
+
+Call DeepSeek-V4-Pro with `stream: true`; use environment variables `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL=DeepSeek-V4-Pro`, `AI_ENABLED`, `AI_MAX_OUTPUT_TOKENS`, `AI_REQUESTS_PER_HOUR`, `AI_GLOBAL_DAILY_TOKEN_BUDGET`, and `AI_GLOBAL_WEEKLY_TOKEN_BUDGET`. Transform upstream chunks to only the four declared event names, forward cancellation through `AbortController`, and never emit model reasoning. Emit `completed` only after an actual upstream `[DONE]` marker; an upstream EOF without `[DONE]` is an `error`. For long multi-block selections, build the anchor neighbourhood before any overall context truncation. Log only anonymous request ID, status/error code, elapsed time, token count, and budget event.
 
 - [ ] **Step 4: Verify function tests and local behavior**
 
-Run: `deno test supabase/functions/ai-companion/context_test.ts && supabase functions serve ai-companion --no-verify-jwt`
+Run: `supabase db reset && supabase test db && deno test supabase/functions/ai-companion/context_test.ts && supabase functions serve ai-companion --no-verify-jwt`
 
-Expected: the test passes and an authenticated request begins with `event: started`, streams `event: delta`, then ends with `event: completed` or typed `event: error`.
+Expected: database and function tests pass. An anonymous authenticated request begins with `event: started`, streams `event: delta`, then ends with `event: completed` only after `[DONE]` or a typed `event: error`; a non-anonymous request, rate-limited request, and exhausted budget request never call DeepSeek.
 
 - [ ] **Step 5: Commit the streaming gateway**
 
 ```bash
-git add supabase/functions/ai-companion docs/demo-environment.md
-git commit -m "feat: add bounded AI companion streaming gateway"
+git add supabase/migrations/202608080001_ai_usage_control.sql supabase/tests/003_ai_usage_control.test.sql supabase/functions/ai-companion supabase/config.toml docs/demo-environment.md
+git commit -m "feat: add durable AI companion abuse controls"
 ```
 
 ### Task 5: Build app services, anonymous bootstrap, cache, and navigation contracts
