@@ -7,6 +7,55 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 void main() {
+  testWidgets(
+    'debug QA entry opens the fixed seed article with reader context',
+    (tester) async {
+      ReaderRouteContext? receivedContext;
+      String? receivedArticleId;
+      final router = createAppRouter(
+        readerScreenBuilder: ({required articleId, required routeContext}) {
+          receivedArticleId = articleId;
+          receivedContext = routeContext;
+          return const SizedBox(key: Key('reader-route'));
+        },
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [_completedAnonymousBootstrapOverride],
+          child: DeepReadingApp(router: router),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.byKey(const Key('debug-qa-open-reader')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('reader-route')), findsOneWidget);
+      expect(receivedArticleId, '10000000-0000-0000-0000-000000000001');
+      expect(receivedContext?.origin, ReaderOrigin.feed);
+      expect(receivedContext?.anchorId, isNull);
+    },
+  );
+
+  testWidgets(
+    'non-debug root keeps the product placeholder instead of QA entry',
+    (tester) async {
+      final router = createAppRouter(enableDebugQaEntry: false);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [_completedAnonymousBootstrapOverride],
+          child: DeepReadingApp(router: router),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Deep Reading'), findsOneWidget);
+      expect(find.byKey(const Key('debug-qa-open-reader')), findsNothing);
+    },
+  );
+
   testWidgets('reader route preserves an anchor in its route context', (
     tester,
   ) async {

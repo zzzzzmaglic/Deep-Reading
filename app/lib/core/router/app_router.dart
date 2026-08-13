@@ -1,6 +1,7 @@
 import 'package:app/features/reader/presentation/article_asset_summary_screen.dart';
 import 'package:app/features/reader/presentation/reader_screen.dart';
 import 'package:app/features/reading_assets/data/reading_asset_repository.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -61,6 +62,7 @@ GoRouter createAppRouter({
   Object? initialExtra,
   ReaderScreenBuilder? readerScreenBuilder,
   ReadingAssetRepository? readingAssetRepository,
+  bool enableDebugQaEntry = kDebugMode,
 }) {
   return GoRouter(
     initialLocation: initialLocation,
@@ -69,6 +71,9 @@ GoRouter createAppRouter({
       GoRoute(
         path: '/',
         builder: (context, state) {
+          if (enableDebugQaEntry) {
+            return const _DebugQaLaunchScreen();
+          }
           return const Scaffold(body: Center(child: Text('Deep Reading')));
         },
       ),
@@ -114,6 +119,29 @@ GoRouter createAppRouter({
       ),
     ],
   );
+}
+
+class _DebugQaLaunchScreen extends StatelessWidget {
+  const _DebugQaLaunchScreen();
+
+  static const _articleId = '10000000-0000-0000-0000-000000000001';
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Deep Reading QA')),
+      body: Center(
+        child: FilledButton(
+          key: const Key('debug-qa-open-reader'),
+          onPressed: () => context.push(
+            '/reader/$_articleId',
+            extra: const ReaderRouteContext(origin: ReaderOrigin.feed),
+          ),
+          child: const Text('Open seed article'),
+        ),
+      ),
+    );
+  }
 }
 
 ReadingAssetRepository? _tryDefaultAssetRepository() {
