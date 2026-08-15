@@ -1,4 +1,5 @@
 import SwiftUI
+import Supabase
 import UIKit
 
 @main
@@ -37,6 +38,7 @@ final class PrototypeSceneDelegate: UIResponder, UIWindowSceneDelegate {
 enum AppRootScreen: Equatable {
     case loading
     case configured
+    case ready
     case configurationFailure(SupabaseRuntimeConfigurationError)
     case sessionFailure
 
@@ -44,12 +46,38 @@ enum AppRootScreen: Equatable {
         switch self {
         case .configurationFailure, .sessionFailure:
             return true
-        case .loading, .configured:
+        case .loading, .configured, .ready:
             return false
         }
     }
 
     var displaysFixtureArticle: Bool { false }
+}
+
+protocol AppRuntimeBootstrapping: AnyObject {
+    func bootstrap() async throws
+}
+
+final class AppRuntime: AppRuntimeBootstrapping, @unchecked Sendable {
+    let client: SupabaseClient
+    let sessionStore: AppSessionStore
+    let articleRepository: SupabaseArticleRepository
+    let readingAssetRepository: SupabaseReadingAssetRepository
+
+    convenience init(configuration: SupabaseRuntimeConfiguration) {
+        self.init(client: SupabaseClientFactory.makeClient(configuration: configuration))
+    }
+
+    init(client: SupabaseClient) {
+        self.client = client
+        sessionStore = AppSessionStore(client: client)
+        articleRepository = SupabaseArticleRepository(client: client)
+        readingAssetRepository = SupabaseReadingAssetRepository(client: client)
+    }
+
+    func bootstrap() async throws {
+        try await sessionStore.bootstrap()
+    }
 }
 
 enum AppRootRenderedElement: Equatable {
@@ -59,23 +87,20 @@ enum AppRootRenderedElement: Equatable {
 
 struct AppRootView: View {
     private let configurationLoader: () throws -> SupabaseRuntimeConfiguration
-    private let sessionBootstrapper: () async throws -> Void
+    private let runtimeBuilder: (SupabaseRuntimeConfiguration) -> any AppRuntimeBootstrapping
     private let renderObserver: ((AppRootRenderedElement) -> Void)?
     @State private var screen = AppRootScreen.loading
+    @State private var runtime: (any AppRuntimeBootstrapping)?
 
     init(
         configurationLoader: @escaping () throws -> SupabaseRuntimeConfiguration = {
             try SupabaseRuntimeConfiguration.load()
         },
-        sessionBootstrapper: @escaping () async throws -> Void = {
-            let configuration = try SupabaseRuntimeConfiguration.load()
-            let client = SupabaseClientFactory.makeClient(configuration: configuration)
-            try await AppSessionStore(client: client).bootstrap()
-        },
+        runtimeBuilder: @escaping (SupabaseRuntimeConfiguration) -> any AppRuntimeBootstrapping = { AppRuntime(configuration: $0) },
         renderObserver: ((AppRootRenderedElement) -> Void)? = nil
     ) {
         self.configurationLoader = configurationLoader
-        self.sessionBootstrapper = sessionBootstrapper
+        self.runtimeBuilder = runtimeBuilder
         self.renderObserver = renderObserver
         _screen = State(initialValue: Self.loadScreen(using: configurationLoader))
     }
@@ -108,26 +133,37 @@ struct AppRootView: View {
                 VStack(spacing: 16) {
                     Text("无法连接阅读服务")
                         .font(.title2.weight(.semibold))
+                        .onAppear { renderObserver?(.text("无法连接阅读服务")) }
                     Button("重试", action: loadConfiguration)
                         .buttonStyle(.borderedProminent)
+                        .onAppear { renderObserver?(.button("重试")) }
                 }
                 .padding(24)
             case .loading:
                 ProgressView("正在准备阅读服务…")
             case .configured:
                 ProgressView("正在准备阅读服务…")
-                    .task { await bootstrapSession() }
+                    .task { await bootstrapRuntime() }
+            case .ready:
+                Text("Reader runtime ready")
+                    .accessibilityIdentifier("app-root-runtime-ready")
+                    .onAppear { renderObserver?(.text("Reader runtime ready")) }
             }
         }
     }
 
     private func loadConfiguration() {
+        runtime = nil
         screen = Self.loadScreen(using: configurationLoader)
     }
 
-    private func bootstrapSession() async {
+    private func bootstrapRuntime() async {
         do {
-            try await sessionBootstrapper()
+            let configuration = try configurationLoader()
+            let newRuntime = runtimeBuilder(configuration)
+            try await newRuntime.bootstrap()
+            runtime = newRuntime
+            screen = .ready
         } catch {
             screen = .sessionFailure
         }

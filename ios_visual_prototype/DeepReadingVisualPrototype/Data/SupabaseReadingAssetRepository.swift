@@ -248,7 +248,20 @@ final class SupabaseReadingAssetRepository: ReadingAssetRepository, @unchecked S
 
     private func optionalDate(in row: [String: Any], column: String) -> Date? {
         guard let value = row[column] as? String else { return nil }
-        return ISO8601DateFormatter().date(from: value)
+        if let decimalIndex = value.firstIndex(of: "."),
+           let timezoneIndex = value[decimalIndex...].firstIndex(where: { $0 == "Z" || $0 == "+" || $0 == "-" }) {
+            let fractionalSeconds = value[value.index(after: decimalIndex)..<timezoneIndex]
+            let wholeSecondsValue = String(value[..<decimalIndex]) + String(value[timezoneIndex...])
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime]
+            if let wholeSeconds = formatter.date(from: wholeSecondsValue),
+               let fraction = Double("0.\(fractionalSeconds)") {
+                return wholeSeconds.addingTimeInterval(fraction)
+            }
+        }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: value)
     }
 }
 

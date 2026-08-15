@@ -101,6 +101,18 @@ final class SupabaseReadingAssetRepositoryTests: XCTestCase {
         XCTAssertEqual(remote.lastRPC?.parameters["p_utf16_offset"] as? Int, 9)
     }
 
+    func testReadAssetsParsesFractionalSecondCreatedAtTimestamp() async throws {
+        let remote = FakeSupabaseReadingAssetRemote()
+        let repository = SupabaseReadingAssetRepository(remote: remote)
+        let assetID = UUID()
+        remote.rowsByTable = [
+            "reading_assets": [["id": assetID.uuidString, "owner_id": UUID().uuidString, "article_id": NSNull(), "note_content": "Timestamped note", "created_at": "2026-08-15T15:30:45.123456+00:00"]],
+            "asset_anchors": [], "tags": [], "asset_tags": [],
+        ]
+        let asset = try await repository.readAssets(articleID: nil).first
+        XCTAssertEqual(asset?.createdAt?.timeIntervalSince1970 ?? 0, 1_786_807_845.123456, accuracy: 0.000001)
+    }
+
     private func assetRows(anchor: TextAnchor) -> [String: [[String: Any]]] {
         let ownerID = UUID().uuidString
         let otherArticleID = UUID().uuidString

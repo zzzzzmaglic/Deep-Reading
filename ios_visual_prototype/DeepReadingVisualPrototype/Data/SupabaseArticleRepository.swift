@@ -1,7 +1,32 @@
 import Foundation
 import Supabase
 
+protocol SupabaseArticleRemote: AnyObject {
+    func readArticle(id: UUID) async throws -> Article
+    func readProgress(articleID: UUID) async throws -> ReaderPosition?
+}
+
 final class SupabaseArticleRepository: ArticleRepository, @unchecked Sendable {
+    private let remote: SupabaseArticleRemote
+
+    init(client: SupabaseClient) {
+        remote = LiveSupabaseArticleRemote(client: client)
+    }
+
+    init(remote: SupabaseArticleRemote) {
+        self.remote = remote
+    }
+
+    func readArticle(id: UUID) async throws -> Article {
+        try await remote.readArticle(id: id)
+    }
+
+    func readProgress(articleID: UUID) async throws -> ReaderPosition? {
+        try await remote.readProgress(articleID: articleID)
+    }
+}
+
+private final class LiveSupabaseArticleRemote: SupabaseArticleRemote, @unchecked Sendable {
     private let client: SupabaseClient
 
     init(client: SupabaseClient) {
