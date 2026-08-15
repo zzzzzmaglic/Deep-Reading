@@ -14,6 +14,7 @@
 		A10000000000000000000006 /* ReaderGlassControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* ReaderGlassControls.swift */; };
 		A10000000000000000000007 /* ReaderOverlayViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* ReaderOverlayViews.swift */; };
 		A10000000000000000000008 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* Assets.xcassets */; };
+		A10000000000000000000009 /* ReaderProgressiveBlurView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* ReaderProgressiveBlurView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,6 +28,7 @@
 		A20000000000000000000008 /* ReaderGlassControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderGlassControls.swift; sourceTree = "<group>"; };
 		A20000000000000000000009 /* ReaderOverlayViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderOverlayViews.swift; sourceTree = "<group>"; };
 		A20000000000000000000010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A20000000000000000000011 /* ReaderProgressiveBlurView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderProgressiveBlurView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -36,7 +38,7 @@
 
 /* Begin PBXGroup section */
 		A40000000000000000000001 = {isa = PBXGroup; children = (A40000000000000000000002 /* DeepReadingVisualPrototype */, A40000000000000000000003 /* DeepReadingVisualPrototypeTests */, A40000000000000000000004 /* Products */); sourceTree = "<group>"; };
-		A40000000000000000000002 /* DeepReadingVisualPrototype */ = {isa = PBXGroup; children = (A20000000000000000000001 /* DeepReadingVisualPrototypeApp.swift */, A20000000000000000000005 /* ReaderPrototypeModel.swift */, A20000000000000000000006 /* ReaderVisualTokens.swift */, A20000000000000000000007 /* ReaderPrototypeView.swift */, A20000000000000000000008 /* ReaderGlassControls.swift */, A20000000000000000000009 /* ReaderOverlayViews.swift */, A20000000000000000000010 /* Assets.xcassets */); path = DeepReadingVisualPrototype; sourceTree = "<group>"; };
+		A40000000000000000000002 /* DeepReadingVisualPrototype */ = {isa = PBXGroup; children = (A20000000000000000000001 /* DeepReadingVisualPrototypeApp.swift */, A20000000000000000000005 /* ReaderPrototypeModel.swift */, A20000000000000000000006 /* ReaderVisualTokens.swift */, A20000000000000000000007 /* ReaderPrototypeView.swift */, A20000000000000000000008 /* ReaderGlassControls.swift */, A20000000000000000000009 /* ReaderOverlayViews.swift */, A20000000000000000000011 /* ReaderProgressiveBlurView.swift */, A20000000000000000000010 /* Assets.xcassets */); path = DeepReadingVisualPrototype; sourceTree = "<group>"; };
 		A40000000000000000000003 /* DeepReadingVisualPrototypeTests */ = {isa = PBXGroup; children = (A20000000000000000000002 /* ReaderPrototypeModelTests.swift */); path = DeepReadingVisualPrototypeTests; sourceTree = "<group>"; };
 		A40000000000000000000004 /* Products */ = {isa = PBXGroup; children = (A20000000000000000000003 /* DeepReadingVisualPrototype.app */, A20000000000000000000004 /* DeepReadingVisualPrototypeTests.xctest */); name = Products; sourceTree = "<group>"; };
 /* End PBXGroup section */
@@ -56,7 +58,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A70000000000000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001 /* DeepReadingVisualPrototypeApp.swift in Sources */, A10000000000000000000003 /* ReaderPrototypeModel.swift in Sources */, A10000000000000000000004 /* ReaderVisualTokens.swift in Sources */, A10000000000000000000005 /* ReaderPrototypeView.swift in Sources */, A10000000000000000000006 /* ReaderGlassControls.swift in Sources */, A10000000000000000000007 /* ReaderOverlayViews.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
+		A70000000000000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001 /* DeepReadingVisualPrototypeApp.swift in Sources */, A10000000000000000000003 /* ReaderPrototypeModel.swift in Sources */, A10000000000000000000004 /* ReaderVisualTokens.swift in Sources */, A10000000000000000000005 /* ReaderPrototypeView.swift in Sources */, A10000000000000000000006 /* ReaderGlassControls.swift in Sources */, A10000000000000000000007 /* ReaderOverlayViews.swift in Sources */, A10000000000000000000009 /* ReaderProgressiveBlurView.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
 		A70000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000002 /* ReaderPrototypeModelTests.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 

@@ -4,6 +4,7 @@ enum ReaderVisualTokens {
     static let readerWidth: CGFloat = 393
     static let readerHeight: CGFloat = 852
     static let background = Color(hex: 0xF8F5EF)
+    static let progressiveBlurTint = Color(hex: 0xF2F2F7)
     static let primaryText = Color(hex: 0x1D1D1F)
     static let highlight = Color(hex: 0xF2C42E)
     static let horizontalInset: CGFloat = 28
@@ -16,6 +17,8 @@ enum ReaderVisualTokens {
     static let toolbarWidth: CGFloat = 119
     static let topControlY: CGFloat = 52
     static let bottomControlY: CGFloat = 780
+    static let topProgressiveBlurHeight: CGFloat = 148
+    static let bottomSoftEdgeHeight: CGFloat = 98
 }
 
 extension Color {

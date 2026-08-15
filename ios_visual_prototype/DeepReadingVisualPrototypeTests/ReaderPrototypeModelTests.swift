@@ -2,6 +2,11 @@ import XCTest
 @testable import DeepReadingVisualPrototype
 
 final class ReaderPrototypeModelTests: XCTestCase {
+    func testReaderEdgeEffectSizesMatchTheApprovedMasks() {
+        XCTAssertEqual(ReaderVisualTokens.topProgressiveBlurHeight, 148)
+        XCTAssertEqual(ReaderVisualTokens.bottomSoftEdgeHeight, 98)
+    }
+
     func testStaticArticleKeepsIntroBeforeImageAndRemainingParagraphsAfterIt() {
         let blocks = ReaderPrototypeState.initial.article.blocks
 

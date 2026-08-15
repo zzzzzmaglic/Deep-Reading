@@ -43,6 +43,9 @@ struct ReaderPrototypeView: View {
                     handleScroll(.up)
                 }
             })
+            .overlay(alignment: .top) {
+                ReaderTopProgressiveBlur(isVisible: state.readerChromeIsVisible)
+            }
             .safeAreaBar(edge: .top, spacing: 0) {
                 ReaderTopGlassControls()
                     .opacity(state.readerChromeIsVisible ? 1 : 0)
@@ -58,9 +61,9 @@ struct ReaderPrototypeView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
                 }
             }
-            .scrollEdgeEffectStyle(.soft, for: .top)
             .scrollEdgeEffectStyle(.soft, for: .bottom)
-            .scrollEdgeEffectHidden(!state.readerChromeIsVisible, for: [.top, .bottom])
+            .scrollEdgeEffectHidden(true, for: .top)
+            .scrollEdgeEffectHidden(!state.readerChromeIsVisible, for: .bottom)
 
             overlay
         }
