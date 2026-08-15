@@ -15,6 +15,13 @@
 		A10000000000000000000007 /* ReaderOverlayViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* ReaderOverlayViews.swift */; };
 		A10000000000000000000008 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* Assets.xcassets */; };
 		A10000000000000000000009 /* ReaderProgressiveBlurView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* ReaderProgressiveBlurView.swift */; };
+		A10000000000000000000010 /* SupabaseRuntimeConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000012 /* SupabaseRuntimeConfigurationTests.swift */; };
+		A10000000000000000000011 /* SupabaseRuntimeConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000013 /* SupabaseRuntimeConfiguration.swift */; };
+		A10000000000000000000012 /* SupabaseClientFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000014 /* SupabaseClientFactory.swift */; };
+		A10000000000000000000013 /* Article.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000015 /* Article.swift */; };
+		A10000000000000000000014 /* ReadingAsset.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* ReadingAsset.swift */; };
+		A10000000000000000000015 /* RepositoryProtocols.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* RepositoryProtocols.swift */; };
+		A10000000000000000000016 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = A20000000000000000000020 /* Supabase */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -29,27 +36,37 @@
 		A20000000000000000000009 /* ReaderOverlayViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderOverlayViews.swift; sourceTree = "<group>"; };
 		A20000000000000000000010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A20000000000000000000011 /* ReaderProgressiveBlurView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderProgressiveBlurView.swift; sourceTree = "<group>"; };
+		A20000000000000000000012 /* SupabaseRuntimeConfigurationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseRuntimeConfigurationTests.swift; sourceTree = "<group>"; };
+		A20000000000000000000013 /* SupabaseRuntimeConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseRuntimeConfiguration.swift; sourceTree = "<group>"; };
+		A20000000000000000000014 /* SupabaseClientFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseClientFactory.swift; sourceTree = "<group>"; };
+		A20000000000000000000015 /* Article.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Article.swift; sourceTree = "<group>"; };
+		A20000000000000000000016 /* ReadingAsset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingAsset.swift; sourceTree = "<group>"; };
+		A20000000000000000000017 /* RepositoryProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepositoryProtocols.swift; sourceTree = "<group>"; };
+		A20000000000000000000018 /* Debug.xcconfig.example */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig.example; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		A30000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A30000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000016 /* Supabase in Frameworks */); runOnlyForDeploymentPostprocessing = 0; };
 		A30000000000000000000002 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		A40000000000000000000001 = {isa = PBXGroup; children = (A40000000000000000000002 /* DeepReadingVisualPrototype */, A40000000000000000000003 /* DeepReadingVisualPrototypeTests */, A40000000000000000000004 /* Products */); sourceTree = "<group>"; };
-		A40000000000000000000002 /* DeepReadingVisualPrototype */ = {isa = PBXGroup; children = (A20000000000000000000001 /* DeepReadingVisualPrototypeApp.swift */, A20000000000000000000005 /* ReaderPrototypeModel.swift */, A20000000000000000000006 /* ReaderVisualTokens.swift */, A20000000000000000000007 /* ReaderPrototypeView.swift */, A20000000000000000000008 /* ReaderGlassControls.swift */, A20000000000000000000009 /* ReaderOverlayViews.swift */, A20000000000000000000011 /* ReaderProgressiveBlurView.swift */, A20000000000000000000010 /* Assets.xcassets */); path = DeepReadingVisualPrototype; sourceTree = "<group>"; };
-		A40000000000000000000003 /* DeepReadingVisualPrototypeTests */ = {isa = PBXGroup; children = (A20000000000000000000002 /* ReaderPrototypeModelTests.swift */); path = DeepReadingVisualPrototypeTests; sourceTree = "<group>"; };
+		A40000000000000000000002 /* DeepReadingVisualPrototype */ = {isa = PBXGroup; children = (A20000000000000000000001 /* DeepReadingVisualPrototypeApp.swift */, A40000000000000000000005 /* Configuration */, A40000000000000000000006 /* Data */, A40000000000000000000007 /* Domain */, A20000000000000000000005 /* ReaderPrototypeModel.swift */, A20000000000000000000006 /* ReaderVisualTokens.swift */, A20000000000000000000007 /* ReaderPrototypeView.swift */, A20000000000000000000008 /* ReaderGlassControls.swift */, A20000000000000000000009 /* ReaderOverlayViews.swift */, A20000000000000000000011 /* ReaderProgressiveBlurView.swift */, A20000000000000000000010 /* Assets.xcassets */); path = DeepReadingVisualPrototype; sourceTree = "<group>"; };
+		A40000000000000000000003 /* DeepReadingVisualPrototypeTests */ = {isa = PBXGroup; children = (A20000000000000000000002 /* ReaderPrototypeModelTests.swift */, A20000000000000000000012 /* SupabaseRuntimeConfigurationTests.swift */); path = DeepReadingVisualPrototypeTests; sourceTree = "<group>"; };
 		A40000000000000000000004 /* Products */ = {isa = PBXGroup; children = (A20000000000000000000003 /* DeepReadingVisualPrototype.app */, A20000000000000000000004 /* DeepReadingVisualPrototypeTests.xctest */); name = Products; sourceTree = "<group>"; };
+		A40000000000000000000005 /* Configuration */ = {isa = PBXGroup; children = (A20000000000000000000013 /* SupabaseRuntimeConfiguration.swift */, A20000000000000000000018 /* Debug.xcconfig.example */); path = Configuration; sourceTree = "<group>"; };
+		A40000000000000000000006 /* Data */ = {isa = PBXGroup; children = (A20000000000000000000014 /* SupabaseClientFactory.swift */); path = Data; sourceTree = "<group>"; };
+		A40000000000000000000007 /* Domain */ = {isa = PBXGroup; children = (A20000000000000000000015 /* Article.swift */, A20000000000000000000016 /* ReadingAsset.swift */, A20000000000000000000017 /* RepositoryProtocols.swift */); path = Domain; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A50000000000000000000001 /* DeepReadingVisualPrototype */ = {isa = PBXNativeTarget; buildConfigurationList = A60000000000000000000001 /* Build configuration list for PBXNativeTarget "DeepReadingVisualPrototype" */; buildPhases = (A70000000000000000000001 /* Sources */, A30000000000000000000001 /* Frameworks */, A80000000000000000000001 /* Resources */); buildRules = (); dependencies = (); name = DeepReadingVisualPrototype; productName = DeepReadingVisualPrototype; productReference = A20000000000000000000003 /* DeepReadingVisualPrototype.app */; productType = "com.apple.product-type.application"; };
+		A50000000000000000000001 /* DeepReadingVisualPrototype */ = {isa = PBXNativeTarget; buildConfigurationList = A60000000000000000000001 /* Build configuration list for PBXNativeTarget "DeepReadingVisualPrototype" */; buildPhases = (A70000000000000000000001 /* Sources */, A30000000000000000000001 /* Frameworks */, A80000000000000000000001 /* Resources */); buildRules = (); dependencies = (); name = DeepReadingVisualPrototype; packageProductDependencies = (A20000000000000000000020 /* Supabase */); productName = DeepReadingVisualPrototype; productReference = A20000000000000000000003 /* DeepReadingVisualPrototype.app */; productType = "com.apple.product-type.application"; };
 		A50000000000000000000002 /* DeepReadingVisualPrototypeTests */ = {isa = PBXNativeTarget; buildConfigurationList = A60000000000000000000002 /* Build configuration list for PBXNativeTarget "DeepReadingVisualPrototypeTests" */; buildPhases = (A70000000000000000000002 /* Sources */, A30000000000000000000002 /* Frameworks */, A80000000000000000000002 /* Resources */); buildRules = (); dependencies = (A90000000000000000000001 /* PBXTargetDependency */); name = DeepReadingVisualPrototypeTests; productName = DeepReadingVisualPrototypeTests; productReference = A20000000000000000000004 /* DeepReadingVisualPrototypeTests.xctest */; productType = "com.apple.product-type.bundle.unit-test"; };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		A00000000000000000000001 /* Project object */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastUpgradeCheck = 2600; TargetAttributes = {A50000000000000000000001 = {CreatedOnToolsVersion = 26.0;}; A50000000000000000000002 = {CreatedOnToolsVersion = 26.0; TestTargetID = A50000000000000000000001;};};}; buildConfigurationList = A60000000000000000000003 /* Build configuration list for PBXProject "DeepReadingVisualPrototype" */; compatibilityVersion = "Xcode 16.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = A40000000000000000000001; productRefGroup = A40000000000000000000004 /* Products */; projectDirPath = ""; projectRoot = ""; targets = (A50000000000000000000001 /* DeepReadingVisualPrototype */, A50000000000000000000002 /* DeepReadingVisualPrototypeTests */); };
+		A00000000000000000000001 /* Project object */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastUpgradeCheck = 2600; TargetAttributes = {A50000000000000000000001 = {CreatedOnToolsVersion = 26.0;}; A50000000000000000000002 = {CreatedOnToolsVersion = 26.0; TestTargetID = A50000000000000000000001;};};}; buildConfigurationList = A60000000000000000000003 /* Build configuration list for PBXProject "DeepReadingVisualPrototype" */; compatibilityVersion = "Xcode 16.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = A40000000000000000000001; packageReferences = (A20000000000000000000019 /* XCRemoteSwiftPackageReference "supabase-swift" */); productRefGroup = A40000000000000000000004 /* Products */; projectDirPath = ""; projectRoot = ""; targets = (A50000000000000000000001 /* DeepReadingVisualPrototype */, A50000000000000000000002 /* DeepReadingVisualPrototypeTests */); };
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
@@ -58,13 +75,21 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A70000000000000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001 /* DeepReadingVisualPrototypeApp.swift in Sources */, A10000000000000000000003 /* ReaderPrototypeModel.swift in Sources */, A10000000000000000000004 /* ReaderVisualTokens.swift in Sources */, A10000000000000000000005 /* ReaderPrototypeView.swift in Sources */, A10000000000000000000006 /* ReaderGlassControls.swift in Sources */, A10000000000000000000007 /* ReaderOverlayViews.swift in Sources */, A10000000000000000000009 /* ReaderProgressiveBlurView.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
-		A70000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000002 /* ReaderPrototypeModelTests.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
+		A70000000000000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001 /* DeepReadingVisualPrototypeApp.swift in Sources */, A10000000000000000000011 /* SupabaseRuntimeConfiguration.swift in Sources */, A10000000000000000000012 /* SupabaseClientFactory.swift in Sources */, A10000000000000000000013 /* Article.swift in Sources */, A10000000000000000000014 /* ReadingAsset.swift in Sources */, A10000000000000000000015 /* RepositoryProtocols.swift in Sources */, A10000000000000000000003 /* ReaderPrototypeModel.swift in Sources */, A10000000000000000000004 /* ReaderVisualTokens.swift in Sources */, A10000000000000000000005 /* ReaderPrototypeView.swift in Sources */, A10000000000000000000006 /* ReaderGlassControls.swift in Sources */, A10000000000000000000007 /* ReaderOverlayViews.swift in Sources */, A10000000000000000000009 /* ReaderProgressiveBlurView.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
+		A70000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000002 /* ReaderPrototypeModelTests.swift in Sources */, A10000000000000000000010 /* SupabaseRuntimeConfigurationTests.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
 		A90000000000000000000001 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = A50000000000000000000001 /* DeepReadingVisualPrototype */; targetProxy = AA0000000000000000000001 /* PBXContainerItemProxy */; };
 /* End PBXTargetDependency section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A20000000000000000000020 /* Supabase */ = {isa = XCSwiftPackageProductDependency; package = A20000000000000000000019 /* XCRemoteSwiftPackageReference "supabase-swift" */; productName = Supabase; };
+/* End XCSwiftPackageProductDependency section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A20000000000000000000019 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/supabase/supabase-swift.git"; requirement = {kind = upToNextMajorVersion; minimumVersion = 2.0.0; }; };
+/* End XCRemoteSwiftPackageReference section */
 
 /* Begin PBXContainerItemProxy section */
 		AA0000000000000000000001 /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = A00000000000000000000001 /* Project object */; proxyType = 1; remoteGlobalIDString = A50000000000000000000001; remoteInfo = DeepReadingVisualPrototype; };
@@ -73,7 +98,7 @@
 /* Begin XCBuildConfiguration section */
 		AB0000000000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; SWIFT_VERSION = 5.0;}; name = Debug; };
 		AB0000000000000000000002 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; SWIFT_VERSION = 5.0;}; name = Release; };
-		AB0000000000000000000003 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGNING_ALLOWED = NO; ENABLE_TESTABILITY = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = DeepReadingVisualPrototype/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 26.0; PRODUCT_BUNDLE_IDENTIFIER = com.deepreading.visualprototype; PRODUCT_NAME = DeepReadingVisualPrototype; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1;}; name = Debug; };
+		AB0000000000000000000003 /* Debug */ = {isa = XCBuildConfiguration; baseConfigurationReference = A20000000000000000000018 /* Debug.xcconfig.example */; buildSettings = {CODE_SIGNING_ALLOWED = NO; ENABLE_TESTABILITY = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = DeepReadingVisualPrototype/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 26.0; PRODUCT_BUNDLE_IDENTIFIER = com.deepreading.visualprototype; PRODUCT_NAME = DeepReadingVisualPrototype; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1;}; name = Debug; };
 		AB0000000000000000000004 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = DeepReadingVisualPrototype/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 26.0; PRODUCT_BUNDLE_IDENTIFIER = com.deepreading.visualprototype; PRODUCT_NAME = DeepReadingVisualPrototype; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1;}; name = Release; };
 		AB0000000000000000000005 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 26.0; PRODUCT_BUNDLE_IDENTIFIER = com.deepreading.visualprototype.tests; PRODUCT_NAME = DeepReadingVisualPrototypeTests; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DeepReadingVisualPrototype.app/DeepReadingVisualPrototype";}; name = Debug; };
 		AB0000000000000000000006 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 26.0; PRODUCT_BUNDLE_IDENTIFIER = com.deepreading.visualprototype.tests; PRODUCT_NAME = DeepReadingVisualPrototypeTests; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DeepReadingVisualPrototype.app/DeepReadingVisualPrototype";}; name = Release; };

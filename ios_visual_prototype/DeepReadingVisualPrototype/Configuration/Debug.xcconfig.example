@@ -1,0 +1,4 @@
+// Copy to Debug.xcconfig and set values locally. Do not commit the copy.
+SUPABASE_URL =
+SUPABASE_ANON_KEY =
+#include? "Debug.xcconfig"

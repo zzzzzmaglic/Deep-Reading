@@ -75,7 +75,7 @@ struct ReaderPrototypeView: View {
     }
 
     @ViewBuilder
-    private func blockView(_ block: ArticleBlock) -> some View {
+    private func blockView(_ block: PrototypeArticleBlock) -> some View {
         switch block.kind {
         case .paragraph:
             Text(block.text)

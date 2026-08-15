@@ -16,29 +16,29 @@ enum ReaderScrollDirection {
     case down
 }
 
-enum ArticleBlockKind: Equatable {
+enum PrototypeArticleBlockKind: Equatable {
     case paragraph
     case image
 }
 
-struct ArticleBlock: Identifiable, Equatable {
+struct PrototypeArticleBlock: Identifiable, Equatable {
     let id: String
-    let kind: ArticleBlockKind
+    let kind: PrototypeArticleBlockKind
     let text: String
     let imageName: String?
 
-    static func paragraph(_ id: String, _ text: String) -> ArticleBlock {
-        ArticleBlock(id: id, kind: .paragraph, text: text, imageName: nil)
+    static func paragraph(_ id: String, _ text: String) -> PrototypeArticleBlock {
+        PrototypeArticleBlock(id: id, kind: .paragraph, text: text, imageName: nil)
     }
 
-    static func image(_ id: String, name: String) -> ArticleBlock {
-        ArticleBlock(id: id, kind: .image, text: "", imageName: name)
+    static func image(_ id: String, name: String) -> PrototypeArticleBlock {
+        PrototypeArticleBlock(id: id, kind: .image, text: "", imageName: name)
     }
 }
 
 struct PrototypeArticle: Equatable {
     let title: String
-    let blocks: [ArticleBlock]
+    let blocks: [PrototypeArticleBlock]
 }
 
 struct ReaderPrototypeState: Equatable {
