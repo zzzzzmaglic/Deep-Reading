@@ -63,20 +63,28 @@ final class AppRuntime: AppRuntimeBootstrapping, @unchecked Sendable {
     let sessionStore: AppSessionStore
     let articleRepository: SupabaseArticleRepository
     let readingAssetRepository: SupabaseReadingAssetRepository
+    private let sessionBootstrap: @Sendable () async throws -> Void
 
     convenience init(configuration: SupabaseRuntimeConfiguration) {
         self.init(client: SupabaseClientFactory.makeClient(configuration: configuration))
     }
 
-    init(client: SupabaseClient) {
+    init(
+        client: SupabaseClient,
+        sessionBootstrap: (@Sendable () async throws -> Void)? = nil
+    ) {
         self.client = client
-        sessionStore = AppSessionStore(client: client)
+        let sessionStore = AppSessionStore(client: client)
+        self.sessionStore = sessionStore
         articleRepository = SupabaseArticleRepository(client: client)
         readingAssetRepository = SupabaseReadingAssetRepository(client: client)
+        self.sessionBootstrap = sessionBootstrap ?? { [sessionStore] in
+            try await sessionStore.bootstrap()
+        }
     }
 
     func bootstrap() async throws {
-        try await sessionStore.bootstrap()
+        try await sessionBootstrap()
     }
 }
 

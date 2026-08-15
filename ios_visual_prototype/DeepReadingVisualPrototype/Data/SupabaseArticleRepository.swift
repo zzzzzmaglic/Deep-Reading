@@ -7,18 +7,32 @@ protocol SupabaseArticleRemote: AnyObject {
 }
 
 final class SupabaseArticleRepository: ArticleRepository, @unchecked Sendable {
+    private let client: SupabaseClient?
     private let remote: SupabaseArticleRemote
 
+    var clientIdentity: ObjectIdentifier? {
+        client.map(ObjectIdentifier.init)
+    }
+
     init(client: SupabaseClient) {
+        self.client = client
         remote = LiveSupabaseArticleRemote(client: client)
     }
 
     init(remote: SupabaseArticleRemote) {
+        client = nil
         self.remote = remote
     }
 
     func readArticle(id: UUID) async throws -> Article {
-        try await remote.readArticle(id: id)
+        let article = try await remote.readArticle(id: id)
+        return Article(
+            id: article.id,
+            title: article.title,
+            sourceName: article.sourceName,
+            contentChecksum: article.contentChecksum,
+            blocks: article.blocks.sorted { $0.position < $1.position }
+        )
     }
 
     func readProgress(articleID: UUID) async throws -> ReaderPosition? {

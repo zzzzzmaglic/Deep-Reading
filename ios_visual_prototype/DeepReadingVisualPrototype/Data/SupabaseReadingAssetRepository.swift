@@ -16,13 +16,20 @@ enum SupabaseReadingAssetRepositoryError: Error {
 }
 
 final class SupabaseReadingAssetRepository: ReadingAssetRepository, @unchecked Sendable {
+    private let client: SupabaseClient?
     private let remote: SupabaseReadingAssetRemote
 
+    var clientIdentity: ObjectIdentifier? {
+        client.map(ObjectIdentifier.init)
+    }
+
     init(client: SupabaseClient) {
+        self.client = client
         remote = LiveSupabaseReadingAssetRemote(client: client)
     }
 
     init(remote: SupabaseReadingAssetRemote) {
+        client = nil
         self.remote = remote
     }
 

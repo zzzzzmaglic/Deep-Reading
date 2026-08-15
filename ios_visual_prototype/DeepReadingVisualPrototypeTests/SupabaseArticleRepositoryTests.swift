@@ -2,6 +2,26 @@ import XCTest
 @testable import DeepReadingVisualPrototype
 
 final class SupabaseArticleRepositoryTests: XCTestCase {
+    func testReadArticleForwardsRequestedIDAndSortsBlocksByPosition() async throws {
+        let requestedID = UUID()
+        let remote = FakeSupabaseArticleRemote(article: Article(
+            id: requestedID,
+            title: "Seed article",
+            sourceName: "Test source",
+            contentChecksum: "sha256:test",
+            blocks: [
+                ArticleBlock(id: UUID(), articleID: requestedID, position: 30, content: "Third"),
+                ArticleBlock(id: UUID(), articleID: requestedID, position: 10, content: "First"),
+                ArticleBlock(id: UUID(), articleID: requestedID, position: 20, content: "Second"),
+            ]
+        ))
+
+        let article = try await SupabaseArticleRepository(remote: remote).readArticle(id: requestedID)
+
+        XCTAssertEqual(remote.requestedArticleIDs, [requestedID])
+        XCTAssertEqual(article.blocks.map(\.position), [10, 20, 30])
+    }
+
     func testReadArticleReturnsTheRequestedArticleAndPositionOrderedBlocks() async throws {
         let articleID = UUID()
         let expected = Article(id: articleID, title: "Seed article", sourceName: "Test source", contentChecksum: "sha256:test", blocks: [

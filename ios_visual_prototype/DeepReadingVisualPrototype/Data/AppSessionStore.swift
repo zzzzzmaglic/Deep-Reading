@@ -22,13 +22,20 @@ enum AppSessionStoreError: Error {
 }
 
 final class AppSessionStore: SessionAuthenticating, @unchecked Sendable {
+    private let client: SupabaseClient?
     private let remote: AppSessionRemote
 
+    var clientIdentity: ObjectIdentifier? {
+        client.map(ObjectIdentifier.init)
+    }
+
     init(client: SupabaseClient) {
+        self.client = client
         remote = LiveAppSessionRemote(client: client)
     }
 
     init(remote: AppSessionRemote) {
+        client = nil
         self.remote = remote
     }
 
