@@ -118,6 +118,109 @@ void main() {
     );
   });
 
+  testWidgets(
+    'reader paints Figma edge blur above content and below controls',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 852));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await _pumpReader(tester);
+
+      expect(find.byKey(const Key('reader-top-edge-blur')), findsOneWidget);
+      expect(find.byKey(const Key('reader-bottom-edge-blur')), findsOneWidget);
+      expect(
+        tester.getRect(find.byKey(const Key('reader-bottom-edge-blur'))),
+        const Rect.fromLTWH(0, 762, 393, 98),
+      );
+    },
+  );
+
+  testWidgets('reader keeps the disabled AI glass affordance visible', (
+    tester,
+  ) async {
+    await _pumpReader(tester);
+
+    expect(find.byKey(const Key('reader-glass-back')), findsOneWidget);
+    expect(find.byKey(const Key('reader-glass-summary')), findsOneWidget);
+    expect(find.byKey(const Key('reader-glass-tools')), findsOneWidget);
+    expect(find.byKey(const Key('reader-glass-ai')), findsOneWidget);
+
+    await tester.tap(find.text('Article block 1'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<AnimatedOpacity>(find.byKey(const Key('reader-controls')))
+          .opacity,
+      0,
+    );
+    expect(find.byKey(const Key('reader-glass-ai')), findsOneWidget);
+  });
+
+  testWidgets('reader renders an inline article image after its text block', (
+    tester,
+  ) async {
+    final article = Article(
+      id: 'article-image',
+      title: 'Image article',
+      sourceName: 'Deep Reading',
+      contentChecksum: 'checksum-image',
+      blocks: const [
+        ArticleBlock(
+          id: 'intro',
+          articleId: 'article-image',
+          position: 1,
+          content: 'The visualisation follows this paragraph.',
+        ),
+        ArticleBlock(
+          id: 'four-forces-image',
+          articleId: 'article-image',
+          position: 2,
+          content: '[[image:four-forces]]',
+        ),
+        ArticleBlock(
+          id: 'after-image',
+          articleId: 'article-image',
+          position: 3,
+          content: 'The following paragraph remains selectable text.',
+        ),
+      ],
+    );
+
+    await _pumpReader(tester, article: article, assets: const []);
+
+    expect(find.text('Image article'), findsOneWidget);
+    expect(
+      find.byKey(const Key('reader-inline-image-four-forces')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .getTopLeft(find.byKey(const Key('reader-inline-image-four-forces')))
+          .dy,
+      greaterThan(
+        tester
+            .getBottomLeft(
+              find.text('The visualisation follows this paragraph.'),
+            )
+            .dy,
+      ),
+    );
+  });
+
+  testWidgets('reader keeps its style affordance visibly disabled', (
+    tester,
+  ) async {
+    await _pumpReader(tester);
+
+    final semantics = tester.widget<Semantics>(
+      find.byWidgetPredicate(
+        (widget) => widget is Semantics && widget.properties.label == '阅读器样式设置',
+      ),
+    );
+    expect(semantics.properties.enabled, isFalse);
+    expect(find.byType(InkWell), findsOneWidget);
+  });
+
   testWidgets('persisted highlights render across block boundaries', (
     tester,
   ) async {

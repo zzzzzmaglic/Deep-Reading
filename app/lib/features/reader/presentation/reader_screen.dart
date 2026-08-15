@@ -5,7 +5,9 @@ import 'package:app/core/storage/preference_store.dart';
 import 'package:app/features/reader/data/article_repository.dart';
 import 'package:app/features/reader/domain/article.dart';
 import 'package:app/features/reader/presentation/reader_controller.dart';
+import 'package:app/features/reader/presentation/reader_glass_control_surface.dart';
 import 'package:app/features/reader/presentation/reader_style_sheet.dart';
+import 'package:app/features/reader/presentation/reader_visual_tokens.dart';
 import 'package:app/features/reader/presentation/selection/reader_context_menu.dart';
 import 'package:app/features/reader/presentation/selection/reader_selection_adapter.dart';
 import 'package:app/features/reading_assets/data/reading_asset_repository.dart';
@@ -13,6 +15,7 @@ import 'package:app/features/reading_assets/domain/reading_asset.dart';
 import 'package:app/features/reading_assets/presentation/reading_asset_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -54,6 +57,10 @@ class ReaderScreen extends StatefulWidget {
 }
 
 class _ReaderScreenState extends State<ReaderScreen> {
+  static const _inlineImageMarker = r'[[image:';
+  static const _inlineImageAssets = <String, String>{
+    'four-forces': 'assets/images/four_forces.png',
+  };
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _viewportKey = GlobalKey();
   final Map<String, GlobalKey> _blockKeys = <String, GlobalKey>{};
@@ -90,6 +97,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   @override
   void dispose() {
+    unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
     _scrollController
       ..removeListener(_scheduleViewportProgress)
       ..dispose();
@@ -112,7 +120,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
         brightness: brightness,
       ),
       scaffoldBackgroundColor: brightness == Brightness.light
-          ? const Color(0xfffffcf7)
+          ? ReaderVisualTokens.paper
           : const Color(0xff171717),
     );
     return Theme(
@@ -122,6 +130,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
           fit: StackFit.expand,
           children: [
             _buildContent(context),
+            if (_controlsVisible)
+              const ReaderEdgeBlur(placement: ReaderEdgeBlurPlacement.top),
+            if (_controlsVisible)
+              const ReaderEdgeBlur(placement: ReaderEdgeBlurPlacement.bottom),
             _buildToolbar(context),
             if (_assetsReadError != null) _buildAssetsReadError(context),
             if (_assetCardError != null) _buildAssetCardError(context),
@@ -163,10 +175,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
         if (notification is UserScrollNotification) {
           if (notification.direction == ScrollDirection.forward &&
               !_controlsVisible) {
-            setState(() => _controlsVisible = true);
+            _setControlsVisible(true);
           } else if (notification.direction == ScrollDirection.reverse &&
               _controlsVisible) {
-            setState(() => _controlsVisible = false);
+            _setControlsVisible(false);
           }
         }
         if (notification is ScrollUpdateNotification ||
@@ -181,7 +193,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
           if (_selection != null) {
             return;
           }
-          setState(() => _controlsVisible = !_controlsVisible);
+          _setControlsVisible(!_controlsVisible);
         },
         child: CustomScrollView(
           key: _viewportKey,
@@ -194,16 +206,17 @@ class _ReaderScreenState extends State<ReaderScreen> {
               ),
             SliverPadding(
               padding: const EdgeInsets.only(
-                top: 84,
-                left: 20,
-                right: 20,
-                bottom: 112,
+                left: ReaderVisualTokens.contentHorizontal,
+                right: ReaderVisualTokens.contentHorizontal,
               ),
               sliver: SliverToBoxAdapter(
                 child: Column(
-                  children: article.blocks
-                      .map((block) => _buildBlock(context, block))
-                      .toList(growable: false),
+                  children: <Widget>[
+                    _buildArticleHeader(article),
+                    ...article.blocks.map(
+                      (block) => _buildBlock(context, block),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -228,6 +241,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   Widget _buildBlock(BuildContext context, ArticleBlock block) {
+    final imageName = _inlineImageName(block.content);
+    if (imageName != null) {
+      return _buildInlineImage(block, imageName);
+    }
     final highlightRanges = _highlightRangesFor(block);
     final content = Padding(
       key: _blockKeys[block.id],
@@ -254,14 +271,70 @@ class _ReaderScreenState extends State<ReaderScreen> {
     );
   }
 
+  Widget _buildArticleHeader(Article article) => Padding(
+    padding: const EdgeInsets.fromLTRB(0, 116, 0, 28),
+    child: Text(
+      article.title,
+      key: const Key('reader-article-title'),
+      style: const TextStyle(
+        color: Color(0xff1d1d1f),
+        fontSize: 28,
+        fontWeight: FontWeight.w500,
+        height: 34 / 28,
+      ),
+    ),
+  );
+
+  String? _inlineImageName(String content) {
+    if (!content.startsWith(_inlineImageMarker) || !content.endsWith(']]')) {
+      return null;
+    }
+    final name = content.substring(
+      _inlineImageMarker.length,
+      content.length - 2,
+    );
+    return _inlineImageAssets.containsKey(name) ? name : null;
+  }
+
+  Widget _buildInlineImage(ArticleBlock block, String imageName) => Padding(
+    key: Key('reader-block-${block.id}'),
+    padding: const EdgeInsets.only(bottom: 28),
+    child: Image.asset(
+      _inlineImageAssets[imageName]!,
+      key: Key('reader-inline-image-$imageName'),
+      width: double.infinity,
+      fit: BoxFit.fitWidth,
+      semanticLabel: '文章配图',
+    ),
+  );
+
+  void _setControlsVisible(bool visible) {
+    if (_controlsVisible == visible) {
+      return;
+    }
+    setState(() => _controlsVisible = visible);
+    unawaited(
+      SystemChrome.setEnabledSystemUIMode(
+        visible ? SystemUiMode.edgeToEdge : SystemUiMode.manual,
+        overlays: visible
+            ? null
+            : const <SystemUiOverlay>[SystemUiOverlay.bottom],
+      ),
+    );
+  }
+
   TextSpan _buildBlockSpan(
     BuildContext context,
     ArticleBlock block,
     List<_HighlightRange> ranges,
   ) {
     final style = TextStyle(
-      fontSize: _fontSize.points,
-      height: 1.45,
+      fontSize: _fontSize == ReaderFontSize.defaultSize
+          ? ReaderVisualTokens.bodyFontSize
+          : _fontSize.points,
+      height: _fontSize == ReaderFontSize.defaultSize
+          ? ReaderVisualTokens.bodyLineHeight
+          : 1.45,
       color: Theme.of(context).colorScheme.onSurface,
     );
     if (ranges.isEmpty) {
@@ -372,60 +445,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   Widget _buildToolbar(BuildContext context) {
-    return IgnorePointer(
-      ignoring: !_controlsVisible,
-      child: AnimatedOpacity(
-        key: const Key('reader-controls'),
-        duration: const Duration(milliseconds: 180),
-        opacity: _controlsVisible ? 1 : 0,
-        child: SafeArea(
-          child: Stack(
-            children: [
-              Positioned(
-                top: 8,
-                left: 12,
-                child: IconButton(
-                  tooltip: 'Back',
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () => Navigator.of(context).maybePop(),
-                ),
-              ),
-              Positioned(
-                top: 8,
-                right: 12,
-                child: IconButton(
-                  key: const Key('reader-asset-summary'),
-                  tooltip: '标注与笔记',
-                  icon: const Icon(Icons.bookmarks_outlined),
-                  onPressed: () => context.push(
-                    '/reader/${Uri.encodeComponent(widget.articleId)}/summary',
-                  ),
-                ),
-              ),
-              Positioned(
-                bottom: 12,
-                left: 16,
-                child: IconButton(
-                  key: const Key('reader-style-settings'),
-                  tooltip: 'Reader style settings',
-                  icon: const Icon(Icons.format_size),
-                  onPressed: () => _showStyleSheet(context),
-                ),
-              ),
-              Positioned(
-                bottom: 12,
-                right: 16,
-                child: IconButton(
-                  key: const Key('reader-add-standalone-note'),
-                  tooltip: 'Add standalone note',
-                  icon: const Icon(Icons.note_add_outlined),
-                  onPressed: _requestStandaloneNote,
-                ),
-              ),
-            ],
-          ),
-        ),
+    return ReaderGlassControlSurface(
+      controlsVisible: _controlsVisible,
+      onBack: () => Navigator.of(context).maybePop(),
+      onSummary: () => context.push(
+        '/reader/${Uri.encodeComponent(widget.articleId)}/summary',
       ),
+      onStandaloneNote: _requestStandaloneNote,
     );
   }
 
