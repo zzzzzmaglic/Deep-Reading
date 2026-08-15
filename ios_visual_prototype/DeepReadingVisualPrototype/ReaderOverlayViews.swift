@@ -1,5 +1,7 @@
 import SwiftUI
 
+#if DEBUG
+
 struct ReaderSelectionOverlay: View {
     let underline: () -> Void
     let dismiss: () -> Void
@@ -188,3 +190,4 @@ struct ReaderTagSheetOverlay: View {
         .frame(height: 48)
     }
 }
+#endif

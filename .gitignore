@@ -45,5 +45,8 @@ Figma UX Version Local Copy/
 # Project-local development SDKs
 .tools/
 
+# Local native app configuration; use the tracked example as the template.
+ios_visual_prototype/DeepReadingVisualPrototype/Configuration/Debug.xcconfig
+
 # Server-only local Supabase Edge Function secrets
 supabase/.env.local

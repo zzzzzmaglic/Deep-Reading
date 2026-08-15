@@ -1,5 +1,7 @@
 import SwiftUI
 
+#if DEBUG
+
 enum ReaderVisualTokens {
     static let readerWidth: CGFloat = 393
     static let readerHeight: CGFloat = 852
@@ -20,6 +22,7 @@ enum ReaderVisualTokens {
     static let topProgressiveBlurHeight: CGFloat = 148
     static let bottomSoftEdgeHeight: CGFloat = 98
 }
+#endif
 
 extension Color {
     init(hex: UInt32, alpha: Double = 1) {

@@ -5,16 +5,34 @@ struct SupabaseRuntimeConfiguration: Sendable, Equatable {
     let anonKey: String
 
     static func load(bundle: Bundle = .main) throws -> SupabaseRuntimeConfiguration {
-        let values = [
+        let bundleValues = [
             "SUPABASE_URL": bundle.object(forInfoDictionaryKey: "SUPABASE_URL") as? String,
             "SUPABASE_ANON_KEY": bundle.object(forInfoDictionaryKey: "SUPABASE_ANON_KEY") as? String,
         ]
-        return try load(values: values)
+        return try load(
+            environment: ProcessInfo.processInfo.environment,
+            bundleValues: bundleValues
+        )
     }
 
     static func load(values: [String: String?]) throws -> SupabaseRuntimeConfiguration {
-        let urlValue = try requiredValue(named: "SUPABASE_URL", in: values)
-        let anonKey = try requiredValue(named: "SUPABASE_ANON_KEY", in: values)
+        try load(environment: [:], bundleValues: values)
+    }
+
+    static func load(
+        environment: [String: String],
+        bundleValues: [String: String?]
+    ) throws -> SupabaseRuntimeConfiguration {
+        let urlValue = try requiredValue(
+            named: "SUPABASE_URL",
+            environment: environment,
+            bundleValues: bundleValues
+        )
+        let anonKey = try requiredValue(
+            named: "SUPABASE_ANON_KEY",
+            environment: environment,
+            bundleValues: bundleValues
+        )
 
         guard let url = URL(string: urlValue), let scheme = url.scheme, !scheme.isEmpty, url.host != nil else {
             throw SupabaseRuntimeConfigurationError.invalidURL
@@ -25,9 +43,11 @@ struct SupabaseRuntimeConfiguration: Sendable, Equatable {
 
     private static func requiredValue(
         named name: String,
-        in values: [String: String?]
+        environment: [String: String],
+        bundleValues: [String: String?]
     ) throws -> String {
-        guard let rawValue = values[name] ?? nil else {
+        let rawValue = environment[name] ?? (bundleValues[name] ?? nil)
+        guard let rawValue else {
             throw SupabaseRuntimeConfigurationError.missingValue(name)
         }
         let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)

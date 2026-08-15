@@ -1,5 +1,7 @@
 import Foundation
 
+#if DEBUG
+
 enum ReaderFrame: String, CaseIterable {
     case controlsVisible
     case focused
@@ -128,3 +130,4 @@ private extension PrototypeArticle {
         ]
     )
 }
+#endif

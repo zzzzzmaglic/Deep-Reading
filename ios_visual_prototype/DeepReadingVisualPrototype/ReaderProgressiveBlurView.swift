@@ -3,6 +3,8 @@ import QuartzCore
 import SwiftUI
 import UIKit
 
+#if DEBUG
+
 /// Simulator-only visual-prototype implementation.
 ///
 /// The effect uses the private `CAFilter` variable-blur mechanism to make the
@@ -131,3 +133,4 @@ private final class ReaderVariableBlurEffectView: UIVisualEffectView {
         )
     }
 }
+#endif

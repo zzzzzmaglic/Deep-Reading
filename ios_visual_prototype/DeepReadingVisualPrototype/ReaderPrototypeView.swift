@@ -1,5 +1,7 @@
 import SwiftUI
 
+#if DEBUG
+
 struct ReaderPrototypeView: View {
     @State private var state: ReaderPrototypeState
 
@@ -131,3 +133,4 @@ struct ReaderPrototypeView: View {
         }
     }
 }
+#endif

@@ -34,12 +34,28 @@ final class PrototypeSceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 }
 
+enum AppRootScreen: Equatable {
+    case loading
+    case configured
+    case configurationFailure(SupabaseRuntimeConfigurationError)
+
+    var showsRetry: Bool {
+        if case .configurationFailure = self {
+            return true
+        }
+        return false
+    }
+
+    var displaysFixtureArticle: Bool { false }
+}
+
 struct AppRootView: View {
-    @State private var configurationError: SupabaseRuntimeConfigurationError?
+    @State private var screen = AppRootScreen.loading
 
     var body: some View {
         Group {
-            if let configurationError {
+            switch screen {
+            case let .configurationFailure(configurationError):
                 VStack(spacing: 16) {
                     Text("无法启动阅读服务")
                         .font(.title2.weight(.semibold))
@@ -50,7 +66,7 @@ struct AppRootView: View {
                         .buttonStyle(.borderedProminent)
                 }
                 .padding(24)
-            } else {
+            case .loading, .configured:
                 ProgressView("正在准备阅读服务…")
             }
         }
@@ -60,11 +76,11 @@ struct AppRootView: View {
     private func loadConfiguration() {
         do {
             _ = try SupabaseRuntimeConfiguration.load()
-            configurationError = nil
+            screen = .configured
         } catch let error as SupabaseRuntimeConfigurationError {
-            configurationError = error
+            screen = .configurationFailure(error)
         } catch {
-            configurationError = .missingValue("SUPABASE_URL")
+            screen = .configurationFailure(.missingValue("SUPABASE_URL"))
         }
     }
 }

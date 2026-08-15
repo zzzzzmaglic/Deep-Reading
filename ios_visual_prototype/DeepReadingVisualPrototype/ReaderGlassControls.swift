@@ -1,5 +1,7 @@
 import SwiftUI
 
+#if DEBUG
+
 struct ReaderTopGlassControls: View {
     var body: some View {
         HStack {
@@ -85,3 +87,4 @@ struct ReaderBounceButtonStyle: ButtonStyle {
             .animation(.interactiveSpring(duration: 0.18, extraBounce: 0.18), value: configuration.isPressed)
     }
 }
+#endif
