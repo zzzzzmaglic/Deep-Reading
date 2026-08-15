@@ -1,4 +1,6 @@
 import XCTest
+import SwiftUI
+import UIKit
 @testable import DeepReadingVisualPrototype
 
 final class SupabaseRuntimeConfigurationTests: XCTestCase {
@@ -78,6 +80,36 @@ final class SupabaseRuntimeConfigurationTests: XCTestCase {
         XCTAssertFalse(screen.displaysFixtureArticle)
     }
 
+    @MainActor
+    func testMissingConfigurationRendersErrorAndRetryWithoutFixtureArticle() async throws {
+        let recorder = AppRootRenderRecorder()
+        let controller = UIHostingController(
+            rootView: AppRootView(configurationLoader: {
+                throw SupabaseRuntimeConfigurationError.missingValue("SUPABASE_URL")
+            }, renderObserver: recorder.record)
+        )
+        guard let windowScene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else {
+            XCTFail("The test host does not provide a window scene.")
+            return
+        }
+        let window = UIWindow(windowScene: windowScene)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        controller.loadViewIfNeeded()
+        controller.view.setNeedsLayout()
+        controller.view.layoutIfNeeded()
+        window.layoutIfNeeded()
+        try await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertTrue(recorder.elements.contains(.text("无法启动阅读服务")))
+        XCTAssertTrue(recorder.elements.contains(.text("Missing required public configuration: SUPABASE_URL.")))
+        XCTAssertTrue(recorder.elements.contains(.button("重试")))
+        XCTAssertFalse(recorder.elements.contains(.text("1600-2100年的公司简史")))
+        XCTAssertFalse(recorder.elements.contains(.text("人类世界，和物理学一样，可以简化为四种根本的力量")))
+    }
+
     func testReadingAssetDerivesLinkedNoteOnlyWhenItHasAnchorAndNote() {
         let anchor = TextAnchor(
             id: UUID(),
@@ -101,5 +133,14 @@ final class SupabaseRuntimeConfigurationTests: XCTestCase {
             "SUPABASE_URL": "https://bundle.example.test",
             "SUPABASE_ANON_KEY": "bundle-key",
         ]
+    }
+}
+
+@MainActor
+private final class AppRootRenderRecorder {
+    private(set) var elements: [AppRootRenderedElement] = []
+
+    func record(_ element: AppRootRenderedElement) {
+        elements.append(element)
     }
 }

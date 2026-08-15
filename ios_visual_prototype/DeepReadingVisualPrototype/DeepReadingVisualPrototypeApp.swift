@@ -49,8 +49,26 @@ enum AppRootScreen: Equatable {
     var displaysFixtureArticle: Bool { false }
 }
 
+enum AppRootRenderedElement: Equatable {
+    case text(String)
+    case button(String)
+}
+
 struct AppRootView: View {
+    private let configurationLoader: () throws -> SupabaseRuntimeConfiguration
+    private let renderObserver: ((AppRootRenderedElement) -> Void)?
     @State private var screen = AppRootScreen.loading
+
+    init(
+        configurationLoader: @escaping () throws -> SupabaseRuntimeConfiguration = {
+            try SupabaseRuntimeConfiguration.load()
+        },
+        renderObserver: ((AppRootRenderedElement) -> Void)? = nil
+    ) {
+        self.configurationLoader = configurationLoader
+        self.renderObserver = renderObserver
+        _screen = State(initialValue: Self.loadScreen(using: configurationLoader))
+    }
 
     var body: some View {
         Group {
@@ -59,28 +77,43 @@ struct AppRootView: View {
                 VStack(spacing: 16) {
                     Text("无法启动阅读服务")
                         .font(.title2.weight(.semibold))
+                        .accessibilityIdentifier("app-root-configuration-error-title")
+                        .accessibilityLabel("无法启动阅读服务")
+                        .onAppear { renderObserver?(.text("无法启动阅读服务")) }
                     Text(configurationError.localizedDescription)
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("app-root-configuration-error-message")
+                        .accessibilityLabel(configurationError.localizedDescription)
+                        .onAppear { renderObserver?(.text(configurationError.localizedDescription)) }
                     Button("重试", action: loadConfiguration)
                         .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier("app-root-configuration-retry")
+                        .accessibilityLabel("重试")
+                        .onAppear { renderObserver?(.button("重试")) }
                 }
                 .padding(24)
+                .accessibilityIdentifier("app-root-configuration-error")
             case .loading, .configured:
                 ProgressView("正在准备阅读服务…")
             }
         }
-        .task { loadConfiguration() }
     }
 
     private func loadConfiguration() {
+        screen = Self.loadScreen(using: configurationLoader)
+    }
+
+    private static func loadScreen(
+        using configurationLoader: () throws -> SupabaseRuntimeConfiguration
+    ) -> AppRootScreen {
         do {
-            _ = try SupabaseRuntimeConfiguration.load()
-            screen = .configured
+            _ = try configurationLoader()
+            return .configured
         } catch let error as SupabaseRuntimeConfigurationError {
-            screen = .configurationFailure(error)
+            return .configurationFailure(error)
         } catch {
-            screen = .configurationFailure(.missingValue("SUPABASE_URL"))
+            return .configurationFailure(.missingValue("SUPABASE_URL"))
         }
     }
 }
