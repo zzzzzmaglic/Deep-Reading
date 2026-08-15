@@ -38,12 +38,15 @@ enum AppRootScreen: Equatable {
     case loading
     case configured
     case configurationFailure(SupabaseRuntimeConfigurationError)
+    case sessionFailure
 
     var showsRetry: Bool {
-        if case .configurationFailure = self {
+        switch self {
+        case .configurationFailure, .sessionFailure:
             return true
+        case .loading, .configured:
+            return false
         }
-        return false
     }
 
     var displaysFixtureArticle: Bool { false }
@@ -56,6 +59,7 @@ enum AppRootRenderedElement: Equatable {
 
 struct AppRootView: View {
     private let configurationLoader: () throws -> SupabaseRuntimeConfiguration
+    private let sessionBootstrapper: () async throws -> Void
     private let renderObserver: ((AppRootRenderedElement) -> Void)?
     @State private var screen = AppRootScreen.loading
 
@@ -63,9 +67,15 @@ struct AppRootView: View {
         configurationLoader: @escaping () throws -> SupabaseRuntimeConfiguration = {
             try SupabaseRuntimeConfiguration.load()
         },
+        sessionBootstrapper: @escaping () async throws -> Void = {
+            let configuration = try SupabaseRuntimeConfiguration.load()
+            let client = SupabaseClientFactory.makeClient(configuration: configuration)
+            try await AppSessionStore(client: client).bootstrap()
+        },
         renderObserver: ((AppRootRenderedElement) -> Void)? = nil
     ) {
         self.configurationLoader = configurationLoader
+        self.sessionBootstrapper = sessionBootstrapper
         self.renderObserver = renderObserver
         _screen = State(initialValue: Self.loadScreen(using: configurationLoader))
     }
@@ -94,14 +104,33 @@ struct AppRootView: View {
                 }
                 .padding(24)
                 .accessibilityIdentifier("app-root-configuration-error")
-            case .loading, .configured:
+            case .sessionFailure:
+                VStack(spacing: 16) {
+                    Text("无法连接阅读服务")
+                        .font(.title2.weight(.semibold))
+                    Button("重试", action: loadConfiguration)
+                        .buttonStyle(.borderedProminent)
+                }
+                .padding(24)
+            case .loading:
                 ProgressView("正在准备阅读服务…")
+            case .configured:
+                ProgressView("正在准备阅读服务…")
+                    .task { await bootstrapSession() }
             }
         }
     }
 
     private func loadConfiguration() {
         screen = Self.loadScreen(using: configurationLoader)
+    }
+
+    private func bootstrapSession() async {
+        do {
+            try await sessionBootstrapper()
+        } catch {
+            screen = .sessionFailure
+        }
     }
 
     private static func loadScreen(

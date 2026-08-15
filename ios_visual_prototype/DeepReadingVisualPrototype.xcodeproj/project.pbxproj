@@ -22,6 +22,11 @@
 		A10000000000000000000014 /* ReadingAsset.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* ReadingAsset.swift */; };
 		A10000000000000000000015 /* RepositoryProtocols.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* RepositoryProtocols.swift */; };
 		A10000000000000000000016 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = A20000000000000000000020 /* Supabase */; };
+		A10000000000000000000017 /* SupabaseArticleRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000021 /* SupabaseArticleRepository.swift */; };
+		A10000000000000000000018 /* SupabaseReadingAssetRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000022 /* SupabaseReadingAssetRepository.swift */; };
+		A10000000000000000000019 /* AppSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000023 /* AppSessionStore.swift */; };
+		A10000000000000000000020 /* FakeRepositories.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000024 /* FakeRepositories.swift */; };
+		A10000000000000000000021 /* SupabaseReadingAssetRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000025 /* SupabaseReadingAssetRepositoryTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -43,6 +48,11 @@
 		A20000000000000000000016 /* ReadingAsset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingAsset.swift; sourceTree = "<group>"; };
 		A20000000000000000000017 /* RepositoryProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepositoryProtocols.swift; sourceTree = "<group>"; };
 		A20000000000000000000018 /* Debug.xcconfig.example */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig.example; sourceTree = "<group>"; };
+		A20000000000000000000021 /* SupabaseArticleRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseArticleRepository.swift; sourceTree = "<group>"; };
+		A20000000000000000000022 /* SupabaseReadingAssetRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseReadingAssetRepository.swift; sourceTree = "<group>"; };
+		A20000000000000000000023 /* AppSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSessionStore.swift; sourceTree = "<group>"; };
+		A20000000000000000000024 /* FakeRepositories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FakeRepositories.swift; sourceTree = "<group>"; };
+		A20000000000000000000025 /* SupabaseReadingAssetRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseReadingAssetRepositoryTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -53,10 +63,11 @@
 /* Begin PBXGroup section */
 		A40000000000000000000001 = {isa = PBXGroup; children = (A40000000000000000000002 /* DeepReadingVisualPrototype */, A40000000000000000000003 /* DeepReadingVisualPrototypeTests */, A40000000000000000000004 /* Products */); sourceTree = "<group>"; };
 		A40000000000000000000002 /* DeepReadingVisualPrototype */ = {isa = PBXGroup; children = (A20000000000000000000001 /* DeepReadingVisualPrototypeApp.swift */, A40000000000000000000005 /* Configuration */, A40000000000000000000006 /* Data */, A40000000000000000000007 /* Domain */, A20000000000000000000005 /* ReaderPrototypeModel.swift */, A20000000000000000000006 /* ReaderVisualTokens.swift */, A20000000000000000000007 /* ReaderPrototypeView.swift */, A20000000000000000000008 /* ReaderGlassControls.swift */, A20000000000000000000009 /* ReaderOverlayViews.swift */, A20000000000000000000011 /* ReaderProgressiveBlurView.swift */, A20000000000000000000010 /* Assets.xcassets */); path = DeepReadingVisualPrototype; sourceTree = "<group>"; };
-		A40000000000000000000003 /* DeepReadingVisualPrototypeTests */ = {isa = PBXGroup; children = (A20000000000000000000002 /* ReaderPrototypeModelTests.swift */, A20000000000000000000012 /* SupabaseRuntimeConfigurationTests.swift */); path = DeepReadingVisualPrototypeTests; sourceTree = "<group>"; };
+		A40000000000000000000003 /* DeepReadingVisualPrototypeTests */ = {isa = PBXGroup; children = (A20000000000000000000002 /* ReaderPrototypeModelTests.swift */, A20000000000000000000012 /* SupabaseRuntimeConfigurationTests.swift */, A40000000000000000000008 /* Fakes */, A20000000000000000000025 /* SupabaseReadingAssetRepositoryTests.swift */); path = DeepReadingVisualPrototypeTests; sourceTree = "<group>"; };
 		A40000000000000000000004 /* Products */ = {isa = PBXGroup; children = (A20000000000000000000003 /* DeepReadingVisualPrototype.app */, A20000000000000000000004 /* DeepReadingVisualPrototypeTests.xctest */); name = Products; sourceTree = "<group>"; };
 		A40000000000000000000005 /* Configuration */ = {isa = PBXGroup; children = (A20000000000000000000013 /* SupabaseRuntimeConfiguration.swift */, A20000000000000000000018 /* Debug.xcconfig.example */); path = Configuration; sourceTree = "<group>"; };
-		A40000000000000000000006 /* Data */ = {isa = PBXGroup; children = (A20000000000000000000014 /* SupabaseClientFactory.swift */); path = Data; sourceTree = "<group>"; };
+		A40000000000000000000006 /* Data */ = {isa = PBXGroup; children = (A20000000000000000000014 /* SupabaseClientFactory.swift */, A20000000000000000000021 /* SupabaseArticleRepository.swift */, A20000000000000000000022 /* SupabaseReadingAssetRepository.swift */, A20000000000000000000023 /* AppSessionStore.swift */); path = Data; sourceTree = "<group>"; };
+		A40000000000000000000008 /* Fakes */ = {isa = PBXGroup; children = (A20000000000000000000024 /* FakeRepositories.swift */); path = Fakes; sourceTree = "<group>"; };
 		A40000000000000000000007 /* Domain */ = {isa = PBXGroup; children = (A20000000000000000000015 /* Article.swift */, A20000000000000000000016 /* ReadingAsset.swift */, A20000000000000000000017 /* RepositoryProtocols.swift */); path = Domain; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
@@ -75,8 +86,8 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A70000000000000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001 /* DeepReadingVisualPrototypeApp.swift in Sources */, A10000000000000000000011 /* SupabaseRuntimeConfiguration.swift in Sources */, A10000000000000000000012 /* SupabaseClientFactory.swift in Sources */, A10000000000000000000013 /* Article.swift in Sources */, A10000000000000000000014 /* ReadingAsset.swift in Sources */, A10000000000000000000015 /* RepositoryProtocols.swift in Sources */, A10000000000000000000003 /* ReaderPrototypeModel.swift in Sources */, A10000000000000000000004 /* ReaderVisualTokens.swift in Sources */, A10000000000000000000005 /* ReaderPrototypeView.swift in Sources */, A10000000000000000000006 /* ReaderGlassControls.swift in Sources */, A10000000000000000000007 /* ReaderOverlayViews.swift in Sources */, A10000000000000000000009 /* ReaderProgressiveBlurView.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
-		A70000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000002 /* ReaderPrototypeModelTests.swift in Sources */, A10000000000000000000010 /* SupabaseRuntimeConfigurationTests.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
+		A70000000000000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001 /* DeepReadingVisualPrototypeApp.swift in Sources */, A10000000000000000000011 /* SupabaseRuntimeConfiguration.swift in Sources */, A10000000000000000000012 /* SupabaseClientFactory.swift in Sources */, A10000000000000000000013 /* Article.swift in Sources */, A10000000000000000000014 /* ReadingAsset.swift in Sources */, A10000000000000000000015 /* RepositoryProtocols.swift in Sources */, A10000000000000000000017 /* SupabaseArticleRepository.swift in Sources */, A10000000000000000000018 /* SupabaseReadingAssetRepository.swift in Sources */, A10000000000000000000019 /* AppSessionStore.swift in Sources */, A10000000000000000000003 /* ReaderPrototypeModel.swift in Sources */, A10000000000000000000004 /* ReaderVisualTokens.swift in Sources */, A10000000000000000000005 /* ReaderPrototypeView.swift in Sources */, A10000000000000000000006 /* ReaderGlassControls.swift in Sources */, A10000000000000000000007 /* ReaderOverlayViews.swift in Sources */, A10000000000000000000009 /* ReaderProgressiveBlurView.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
+		A70000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000002 /* ReaderPrototypeModelTests.swift in Sources */, A10000000000000000000010 /* SupabaseRuntimeConfigurationTests.swift in Sources */, A10000000000000000000020 /* FakeRepositories.swift in Sources */, A10000000000000000000021 /* SupabaseReadingAssetRepositoryTests.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
