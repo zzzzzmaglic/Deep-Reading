@@ -67,13 +67,10 @@ final class AppSessionStore: SessionAuthenticating, @unchecked Sendable {
             return
         }
 
-        if let restoredSession = try? await remote.restoreSession(),
-           restoredSession.isUsableAnonymousSession,
-           remote.currentSession()?.isUsableAnonymousSession == true {
-            return
-        }
-
-        throw AppSessionStoreError.unavailableAnonymousSession
+        // The freshly returned sign-in result is direct authentication evidence. It is
+        // deliberately distinct from `currentSession()`, which may lag while the SDK's
+        // secure persistence finishes writing.
+        return
     }
 
     func ensureSession() async throws {
@@ -83,31 +80,25 @@ final class AppSessionStore: SessionAuthenticating, @unchecked Sendable {
 
 private final class LiveAppSessionRemote: AppSessionRemote, @unchecked Sendable {
     private let client: SupabaseClient
-    private var recentSession: AppSession?
 
     init(client: SupabaseClient) {
         self.client = client
     }
 
     func currentSession() -> AppSession? {
-        client.auth.currentSession.map(AppSession.init) ?? recentSession
+        client.auth.currentSession.map(AppSession.init)
     }
 
     func restoreSession() async throws -> AppSession? {
-        let session = AppSession(session: try await client.auth.session)
-        recentSession = session
-        return session
+        AppSession(session: try await client.auth.session)
     }
 
     func signOut() async throws {
         try await client.auth.signOut()
-        recentSession = nil
     }
 
     func signInAnonymously() async throws -> AppSession {
-        let session = AppSession(session: try await client.auth.signInAnonymously())
-        recentSession = session
-        return session
+        AppSession(session: try await client.auth.signInAnonymously())
     }
 }
 

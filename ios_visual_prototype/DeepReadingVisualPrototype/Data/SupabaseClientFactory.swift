@@ -6,27 +6,43 @@ enum SupabaseClientFactory {
         SupabaseClient(
             supabaseURL: configuration.url,
             supabaseKey: configuration.anonKey,
-            options: .init(auth: .init(storage: UserDefaultsAuthStorage()))
+            options: .init(auth: .init(storage: KeychainBackedAuthStorage()))
         )
     }
 }
 
-private final class UserDefaultsAuthStorage: AuthLocalStorage, @unchecked Sendable {
-    private let defaults: UserDefaults
-
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-    }
+private final class KeychainBackedAuthStorage: AuthLocalStorage, @unchecked Sendable {
+    private let keychain = KeychainLocalStorage()
+    private let lock = NSLock()
+    private var volatileValues: [String: Data] = [:]
 
     func store(key: String, value: Data) throws {
-        defaults.set(value, forKey: key)
+        defer { setVolatileValue(value, for: key) }
+        try keychain.store(key: key, value: value)
     }
 
     func retrieve(key: String) throws -> Data? {
-        defaults.data(forKey: key)
+        if let storedValue = try? keychain.retrieve(key: key) {
+            setVolatileValue(storedValue, for: key)
+            return storedValue
+        }
+        return volatileValue(for: key)
     }
 
     func remove(key: String) throws {
-        defaults.removeObject(forKey: key)
+        defer { setVolatileValue(nil, for: key) }
+        try keychain.remove(key: key)
+    }
+
+    private func volatileValue(for key: String) -> Data? {
+        lock.lock()
+        defer { lock.unlock() }
+        return volatileValues[key]
+    }
+
+    private func setVolatileValue(_ value: Data?, for key: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        volatileValues[key] = value
     }
 }

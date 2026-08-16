@@ -46,20 +46,32 @@ final class AppSessionStoreTests: XCTestCase {
         XCTAssertEqual(remote.currentSession()?.isUsableAnonymousSession, true)
     }
 
-    func testBootstrapRejectsNewAnonymousSessionWhenNeitherCurrentSessionNorRestoreConfirmsIt() async {
+    func testBootstrapAcceptsFreshAnonymousSignInWhenSDKSessionIsTemporarilyUnavailable() async throws {
         let remote = FakeAppSessionRemote(cachedSession: nil)
         remote.signInUpdatesCurrentSession = false
-        remote.restoredSession = nil
+        remote.restoreError = FakeSessionError.restoreFailed
 
-        do {
-            try await AppSessionStore(remote: remote).bootstrap()
-            XCTFail("Expected an unconfirmed anonymous session to be rejected.")
-        } catch {
-            XCTAssertTrue(error is AppSessionStoreError)
-        }
+        try await AppSessionStore(remote: remote).bootstrap()
 
         XCTAssertEqual(remote.signInCalls, 1)
-        XCTAssertEqual(remote.restoreCalls, 1)
+        XCTAssertEqual(remote.restoreCalls, 0)
+        XCTAssertNil(remote.currentSession())
+    }
+
+    func testBootstrapRejectsExpiredFreshSignInWhenSDKSessionIsTemporarilyUnavailable() async {
+        let remote = FakeAppSessionRemote(cachedSession: nil)
+        remote.signInSession = AppSession(isAnonymous: true, expiresAt: .distantPast)
+        remote.signInUpdatesCurrentSession = false
+
+        await assertUnavailableAnonymousSession(remote)
+    }
+
+    func testBootstrapRejectsNonAnonymousFreshSignInWhenSDKSessionIsTemporarilyUnavailable() async {
+        let remote = FakeAppSessionRemote(cachedSession: nil)
+        remote.signInSession = AppSession(isAnonymous: false, expiresAt: .distantFuture)
+        remote.signInUpdatesCurrentSession = false
+
+        await assertUnavailableAnonymousSession(remote)
     }
 
     func testBootstrapSurfacesAnonymousSignInFailure() async {
@@ -70,6 +82,15 @@ final class AppSessionStoreTests: XCTestCase {
             XCTFail("Expected anonymous sign-in failure to be surfaced.")
         } catch {
             XCTAssertEqual(error as? FakeSessionError, .signInFailed)
+        }
+    }
+
+    private func assertUnavailableAnonymousSession(_ remote: FakeAppSessionRemote) async {
+        do {
+            try await AppSessionStore(remote: remote).bootstrap()
+            XCTFail("Expected an unsafe anonymous session to be rejected.")
+        } catch {
+            XCTAssertTrue(error is AppSessionStoreError)
         }
     }
 }
