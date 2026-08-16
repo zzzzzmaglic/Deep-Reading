@@ -97,6 +97,56 @@ final class ReaderCoordinatorTests: XCTestCase {
         XCTAssertEqual(classifier.direction(for: 120, isUserDriven: true), .up)
     }
 
+    func testOnlyUserDrivenScrollsCanPublishReaderProgress() {
+        XCTAssertFalse(ReaderScrollEventClassifier.isUserDriven(
+            isTracking: false,
+            isDragging: false,
+            isDecelerating: false,
+            isRestoringRange: false
+        ))
+        XCTAssertFalse(ReaderScrollEventClassifier.isUserDriven(
+            isTracking: true,
+            isDragging: false,
+            isDecelerating: false,
+            isRestoringRange: true
+        ))
+        XCTAssertTrue(ReaderScrollEventClassifier.isUserDriven(
+            isTracking: false,
+            isDragging: true,
+            isDecelerating: false,
+            isRestoringRange: false
+        ))
+    }
+
+    func testTextDocumentUpdateGateSkipsEquivalentSwiftUIRefreshes() {
+        let articleID = UUID()
+        let revision = ReaderTextDocumentRevision(
+            articleID: articleID,
+            contentChecksum: "checksum",
+            highlights: []
+        )
+        let changedRevision = ReaderTextDocumentRevision(
+            articleID: articleID,
+            contentChecksum: "checksum",
+            highlights: [TextAnchor(
+                id: UUID(),
+                assetID: UUID(),
+                articleID: articleID,
+                startBlockID: UUID(),
+                endBlockID: UUID(),
+                startUTF16Offset: 0,
+                endUTF16Offset: 1,
+                selectedText: "正文",
+                contentChecksum: "checksum"
+            )]
+        )
+        var gate = ReaderTextDocumentUpdateGate()
+
+        XCTAssertTrue(gate.shouldApply(revision))
+        XCTAssertFalse(gate.shouldApply(revision))
+        XCTAssertTrue(gate.shouldApply(changedRevision))
+    }
+
     func testNormalRoutePublishesProgressBeforeDelayedAssetsArrive() async throws {
         let articleID = UUID()
         let blockID = UUID()

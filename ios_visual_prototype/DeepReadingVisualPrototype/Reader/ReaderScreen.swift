@@ -49,10 +49,17 @@ struct ReaderScreen: View {
     @ViewBuilder
     private func readerBody(article: Article) -> some View {
         let layout = ReaderTextLayout(article: article, image: UIImage(named: "FourForces"))
+        let highlights = coordinator.assets.compactMap { $0.anchor }
         let requestedRange = coordinator.initialPosition.flatMap { layout.range(for: $0) }
 
         ReaderTextView(
-            attributedText: layout.attributedText(highlighting: coordinator.assets.compactMap { $0.anchor }),
+            layout: layout,
+            highlights: highlights,
+            documentRevision: ReaderTextDocumentRevision(
+                articleID: article.id,
+                contentChecksum: article.contentChecksum,
+                highlights: highlights
+            ),
             requestedScrollRange: requestedRange,
             onVisibleUTF16Location: coordinator.queueProgress,
             onScrollDirection: coordinator.handleScroll,

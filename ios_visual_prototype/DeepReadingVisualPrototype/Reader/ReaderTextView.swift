@@ -4,6 +4,15 @@ import UIKit
 struct ReaderScrollEventClassifier {
     private var previousOffset: CGFloat = 0
 
+    static func isUserDriven(
+        isTracking: Bool,
+        isDragging: Bool,
+        isDecelerating: Bool,
+        isRestoringRange: Bool
+    ) -> Bool {
+        !isRestoringRange && (isTracking || isDragging || isDecelerating)
+    }
+
     mutating func direction(for offset: CGFloat, isUserDriven: Bool) -> ReaderCoordinator.ScrollDirection? {
         defer { previousOffset = offset }
         guard isUserDriven else { return nil }
@@ -13,8 +22,26 @@ struct ReaderScrollEventClassifier {
     }
 }
 
+struct ReaderTextDocumentRevision: Equatable {
+    let articleID: UUID
+    let contentChecksum: String
+    let highlights: [TextAnchor]
+}
+
+struct ReaderTextDocumentUpdateGate {
+    private var appliedRevision: ReaderTextDocumentRevision?
+
+    mutating func shouldApply(_ revision: ReaderTextDocumentRevision) -> Bool {
+        guard appliedRevision != revision else { return false }
+        appliedRevision = revision
+        return true
+    }
+}
+
 struct ReaderTextView: UIViewRepresentable {
-    let attributedText: NSAttributedString
+    let layout: ReaderTextLayout
+    let highlights: [TextAnchor]
+    let documentRevision: ReaderTextDocumentRevision
     let requestedScrollRange: NSRange?
     let onVisibleUTF16Location: (Int) -> Void
     let onScrollDirection: (ReaderCoordinator.ScrollDirection) -> Void
@@ -50,9 +77,9 @@ struct ReaderTextView: UIViewRepresentable {
             onScrollDirection: onScrollDirection,
             onBodyTap: onBodyTap
         )
-        if !textView.attributedText.isEqual(to: attributedText) {
+        if context.coordinator.documentUpdateGate.shouldApply(documentRevision) {
             let selectedRange = textView.selectedRange
-            textView.attributedText = attributedText
+            textView.attributedText = layout.attributedText(highlighting: highlights)
             if selectedRange.location <= textView.attributedText.length {
                 textView.selectedRange = selectedRange
             }
@@ -70,6 +97,7 @@ struct ReaderTextView: UIViewRepresentable {
 
     final class TextViewCoordinator: NSObject, UITextViewDelegate, UIGestureRecognizerDelegate {
         var lastScrollRange = NSRange(location: NSNotFound, length: 0)
+        var documentUpdateGate = ReaderTextDocumentUpdateGate()
         private var scrollClassifier = ReaderScrollEventClassifier()
         fileprivate var isRestoringRange = false
         private var onVisibleUTF16Location: (Int) -> Void
@@ -104,10 +132,17 @@ struct ReaderTextView: UIViewRepresentable {
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             let offset = scrollView.contentOffset.y
-            let isUserDriven = !isRestoringRange && (scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating)
+            let isUserDriven = ReaderScrollEventClassifier.isUserDriven(
+                isTracking: scrollView.isTracking,
+                isDragging: scrollView.isDragging,
+                isDecelerating: scrollView.isDecelerating,
+                isRestoringRange: isRestoringRange
+            )
             if let direction = scrollClassifier.direction(for: offset, isUserDriven: isUserDriven) {
                 onScrollDirection(direction)
             }
+
+            guard isUserDriven else { return }
 
             guard let textView = scrollView as? UITextView else { return }
             let point = CGPoint(

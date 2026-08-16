@@ -147,7 +147,9 @@ final class ReaderCoordinator: ObservableObject {
                     position: position
                 )
                 guard self.isCurrentProgress(generation) else { return }
-                self.progressFailure = nil
+                if self.progressFailure != nil {
+                    self.progressFailure = nil
+                }
             } catch {
                 guard self.isCurrentProgress(generation) else { return }
                 self.progressFailure = .progressFailed
