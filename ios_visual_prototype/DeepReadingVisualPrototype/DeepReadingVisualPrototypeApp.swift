@@ -56,6 +56,11 @@ enum AppRootScreen: Equatable {
 
 protocol AppRuntimeBootstrapping: AnyObject {
     func bootstrap() async throws
+    var readerDependencies: ReaderDependencies? { get }
+}
+
+extension AppRuntimeBootstrapping {
+    var readerDependencies: ReaderDependencies? { nil }
 }
 
 final class AppRuntime: AppRuntimeBootstrapping, @unchecked Sendable {
@@ -63,6 +68,7 @@ final class AppRuntime: AppRuntimeBootstrapping, @unchecked Sendable {
     let sessionStore: AppSessionStore
     let articleRepository: SupabaseArticleRepository
     let readingAssetRepository: SupabaseReadingAssetRepository
+    let readerDependencies: ReaderDependencies?
     private let sessionBootstrap: @Sendable () async throws -> Void
 
     convenience init(configuration: SupabaseRuntimeConfiguration) {
@@ -78,6 +84,10 @@ final class AppRuntime: AppRuntimeBootstrapping, @unchecked Sendable {
         self.sessionStore = sessionStore
         articleRepository = SupabaseArticleRepository(client: client)
         readingAssetRepository = SupabaseReadingAssetRepository(client: client)
+        readerDependencies = ReaderDependencies(
+            articleRepository: articleRepository,
+            readingAssetRepository: readingAssetRepository
+        )
         self.sessionBootstrap = sessionBootstrap ?? { [sessionStore] in
             try await sessionStore.bootstrap()
         }
@@ -153,9 +163,14 @@ struct AppRootView: View {
                 ProgressView("正在准备阅读服务…")
                     .task { await bootstrapRuntime() }
             case .ready:
-                Text("Reader runtime ready")
-                    .accessibilityIdentifier("app-root-runtime-ready")
-                    .onAppear { renderObserver?(.text("Reader runtime ready")) }
+                if let dependencies = runtime?.readerDependencies {
+                    ReaderScreen(route: .localSeed, dependencies: dependencies)
+                        .onAppear { renderObserver?(.text("Reader runtime ready")) }
+                } else {
+                    Text("Reader runtime ready")
+                        .accessibilityIdentifier("app-root-runtime-ready")
+                        .onAppear { renderObserver?(.text("Reader runtime ready")) }
+                }
             }
         }
     }

@@ -1,16 +1,21 @@
 import SwiftUI
 
-#if DEBUG
-
 struct ReaderTopGlassControls: View {
+    let onBack: () -> Void
+
+    init(onBack: @escaping () -> Void = {}) {
+        self.onBack = onBack
+    }
+
     var body: some View {
         HStack {
-            GlassIconControl(symbol: "chevron.left", label: "返回", action: {})
+            GlassIconControl(symbol: "chevron.left", label: "返回", action: onBack)
             Spacer()
-            GlassIconControl(symbol: "doc.text.magnifyingglass", label: "汇总", action: {})
+            // Summary is introduced in Stage F; retain only the approved visual affordance.
+            GlassIconControl(symbol: "doc.text.magnifyingglass", label: "汇总（即将推出）", action: {}, isEnabled: false)
         }
         .padding(.horizontal, 20)
-        .padding(.top, ReaderVisualTokens.topControlY)
+        .padding(.top, 52)
         .padding(.bottom, 8)
     }
 }
@@ -46,7 +51,7 @@ struct ReaderBottomGlassControls: View {
                         .buttonStyle(ReaderBounceButtonStyle())
                         .accessibilityLabel("独立笔记")
                     }
-                    .frame(width: ReaderVisualTokens.toolbarWidth, height: ReaderVisualTokens.circularControlSize)
+                    .frame(width: 119, height: 44)
                     .glassEffect(.regular.interactive(), in: Capsule())
                 }
             }
@@ -54,7 +59,7 @@ struct ReaderBottomGlassControls: View {
             Spacer()
 
             if showsAIControl {
-                GlassIconControl(symbol: "circle.grid.2x2.fill", label: "AI 伴读（仅视觉）", action: {})
+                GlassIconControl(symbol: "circle.grid.2x2.fill", label: "AI 伴读（仅视觉）", action: {}, isEnabled: false)
             }
         }
         .padding(.horizontal, 22)
@@ -67,14 +72,23 @@ private struct GlassIconControl: View {
     let symbol: String
     let label: String
     let action: () -> Void
+    let isEnabled: Bool
+
+    init(symbol: String, label: String, action: @escaping () -> Void, isEnabled: Bool = true) {
+        self.symbol = symbol
+        self.label = label
+        self.action = action
+        self.isEnabled = isEnabled
+    }
 
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 18, weight: .semibold))
-                .frame(width: ReaderVisualTokens.circularControlSize, height: ReaderVisualTokens.circularControlSize)
+                .frame(width: 44, height: 44)
         }
         .buttonStyle(ReaderBounceButtonStyle())
+        .disabled(!isEnabled)
         .glassEffect(.regular.interactive(), in: Circle())
         .accessibilityLabel(label)
     }
@@ -87,4 +101,3 @@ struct ReaderBounceButtonStyle: ButtonStyle {
             .animation(.interactiveSpring(duration: 0.18, extraBounce: 0.18), value: configuration.isPressed)
     }
 }
-#endif
