@@ -85,6 +85,76 @@ final class ReaderCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.initialPosition, ReaderPosition(blockID: blockID, utf16Offset: 1))
         XCTAssertEqual(coordinator.assetFailure, .assetsFailed)
     }
+
+    func testProgrammaticRestoreDoesNotProduceChromeScrollDirection() {
+        var classifier = ReaderScrollEventClassifier()
+
+        XCTAssertNil(classifier.direction(for: 120, isUserDriven: false))
+        XCTAssertEqual(classifier.direction(for: 140, isUserDriven: true), .down)
+        XCTAssertEqual(classifier.direction(for: 120, isUserDriven: true), .up)
+    }
+
+    func testNormalRoutePublishesProgressBeforeDelayedAssetsArrive() async throws {
+        let articleID = UUID()
+        let blockID = UUID()
+        let article = Article(id: articleID, title: "标题", sourceName: "来源", contentChecksum: "checksum", blocks: [ArticleBlock(id: blockID, articleID: articleID, position: 0, content: "正文", kind: .paragraph)])
+        let assets = ReaderTestAssetRepository(
+            assets: [ReadingAsset(anchor: nil, noteContent: "asset")],
+            readDelay: .milliseconds(180)
+        )
+        let coordinator = ReaderCoordinator(dependencies: ReaderDependencies(
+            articleRepository: ReaderTestArticleRepository(article: article, progress: ReaderPosition(blockID: blockID, utf16Offset: 1)),
+            readingAssetRepository: assets
+        ))
+
+        try await coordinator.load(route: ReaderRoute(articleID: articleID, anchorID: nil, origin: .feed))
+
+        XCTAssertEqual(coordinator.initialPosition, ReaderPosition(blockID: blockID, utf16Offset: 1))
+        XCTAssertTrue(coordinator.assets.isEmpty)
+        try await Task.sleep(for: .milliseconds(240))
+        XCTAssertEqual(coordinator.assets.count, 1)
+    }
+
+    func testSupersededRouteCannotReplaceNewerArticleOrProgress() async throws {
+        let oldID = UUID()
+        let newID = UUID()
+        let oldBlock = UUID()
+        let newBlock = UUID()
+        let oldArticle = Article(id: oldID, title: "旧", sourceName: "来源", contentChecksum: "old", blocks: [ArticleBlock(id: oldBlock, articleID: oldID, position: 0, content: "旧正文", kind: .paragraph)])
+        let newArticle = Article(id: newID, title: "新", sourceName: "来源", contentChecksum: "new", blocks: [ArticleBlock(id: newBlock, articleID: newID, position: 0, content: "新正文", kind: .paragraph)])
+        let repository = ReaderRoutingArticleRepository(
+            articles: [oldID: oldArticle, newID: newArticle],
+            progress: [oldID: ReaderPosition(blockID: oldBlock, utf16Offset: 1), newID: ReaderPosition(blockID: newBlock, utf16Offset: 2)],
+            delayedID: oldID
+        )
+        let coordinator = ReaderCoordinator(dependencies: ReaderDependencies(articleRepository: repository, readingAssetRepository: ReaderTestAssetRepository()))
+
+        Task { try? await coordinator.load(route: ReaderRoute(articleID: oldID, anchorID: nil, origin: .feed)) }
+        try await Task.sleep(for: .milliseconds(25))
+        try await coordinator.load(route: ReaderRoute(articleID: newID, anchorID: nil, origin: .feed))
+        try await Task.sleep(for: .milliseconds(180))
+
+        XCTAssertEqual(coordinator.article?.id, newID)
+        XCTAssertEqual(coordinator.initialPosition, ReaderPosition(blockID: newBlock, utf16Offset: 2))
+    }
+
+    func testSupersededProgressWriteCannotSetFailureAfterNewerWrite() async throws {
+        let articleID = UUID()
+        let blockID = UUID()
+        let article = Article(id: articleID, title: "标题", sourceName: "来源", contentChecksum: "checksum", blocks: [ArticleBlock(id: blockID, articleID: articleID, position: 0, content: "甲乙丙丁", kind: .paragraph)])
+        let assets = ReaderTestAssetRepository(firstProgressWriteFailsAfter: .milliseconds(220))
+        let coordinator = ReaderCoordinator(dependencies: ReaderDependencies(articleRepository: ReaderTestArticleRepository(article: article), readingAssetRepository: assets))
+        try await coordinator.load(route: ReaderRoute(articleID: articleID, anchorID: nil, origin: .feed))
+
+        coordinator.queueProgress(visibleUTF16Location: 4)
+        try await Task.sleep(for: .milliseconds(370))
+        coordinator.queueProgress(visibleUTF16Location: 6)
+        try await Task.sleep(for: .milliseconds(620))
+
+        XCTAssertNil(coordinator.progressFailure)
+        let progressWrites = await assets.progressWrites
+        XCTAssertEqual(progressWrites, [ReaderPosition(blockID: blockID, utf16Offset: 2)])
+    }
 }
 
 private final class ReaderTestArticleRepository: ArticleRepository, @unchecked Sendable {
@@ -99,13 +169,19 @@ private final class ReaderTestArticleRepository: ArticleRepository, @unchecked S
 private actor ReaderTestAssetRepository: ReadingAssetRepository {
     let assets: [ReadingAsset]
     let readError: Bool
+    let readDelay: Duration?
+    let firstProgressWriteFailsAfter: Duration?
     private(set) var progressWrites: [ReaderPosition] = []
+    private var progressAttempts = 0
 
-    init(assets: [ReadingAsset] = [], readError: Bool = false) {
+    init(assets: [ReadingAsset] = [], readError: Bool = false, readDelay: Duration? = nil, firstProgressWriteFailsAfter: Duration? = nil) {
         self.assets = assets
         self.readError = readError
+        self.readDelay = readDelay
+        self.firstProgressWriteFailsAfter = firstProgressWriteFailsAfter
     }
     func readAssets(articleID: UUID?) async throws -> [ReadingAsset] {
+        if let readDelay { try? await Task.sleep(for: readDelay) }
         if readError { throw ReaderTestError.readFailed }
         return assets
     }
@@ -114,7 +190,14 @@ private actor ReaderTestAssetRepository: ReadingAssetRepository {
     func updateReadingAsset(id: UUID, noteContent: String?) async throws -> ReadingAsset { fatalError("Not used") }
     func setAssetTags(assetID: UUID, tagIDs: [UUID]) async throws {}
     func deleteReadingAsset(id: UUID) async throws {}
-    func upsertReadingProgress(articleID: UUID, position: ReaderPosition) async throws { progressWrites.append(position) }
+    func upsertReadingProgress(articleID: UUID, position: ReaderPosition) async throws {
+        progressAttempts += 1
+        if progressAttempts == 1, let firstProgressWriteFailsAfter {
+            try? await Task.sleep(for: firstProgressWriteFailsAfter)
+            throw ReaderTestError.writeFailed
+        }
+        progressWrites.append(position)
+    }
     func readTags() async throws -> [Tag] { [] }
     func createTag(name: String) async throws -> Tag { fatalError("Not used") }
     func saveReadingAsset(id: UUID, noteContent: String?, tagIDs: [UUID]) async throws -> ReadingAsset { fatalError("Not used") }
@@ -125,4 +208,22 @@ private extension Article {
     static let empty = Article(id: UUID(), title: "", sourceName: "", contentChecksum: "", blocks: [])
 }
 
-private enum ReaderTestError: Error { case readFailed }
+private enum ReaderTestError: Error { case readFailed, writeFailed }
+
+private final class ReaderRoutingArticleRepository: ArticleRepository, @unchecked Sendable {
+    let articles: [UUID: Article]
+    let progress: [UUID: ReaderPosition]
+    let delayedID: UUID
+
+    init(articles: [UUID: Article], progress: [UUID: ReaderPosition], delayedID: UUID) {
+        self.articles = articles
+        self.progress = progress
+        self.delayedID = delayedID
+    }
+    func readArticle(id: UUID) async throws -> Article {
+        if id == delayedID { try? await Task.sleep(for: .milliseconds(120)) }
+        guard let article = articles[id] else { throw ReaderTestError.readFailed }
+        return article
+    }
+    func readProgress(articleID: UUID) async throws -> ReaderPosition? { progress[articleID] }
+}

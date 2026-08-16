@@ -39,7 +39,10 @@ final class ReaderCoordinator: ObservableObject {
     private var lastRoute: ReaderRoute?
     private var lastQueuedPosition: ReaderPosition?
     private var progressTask: Task<Void, Never>?
+    private var assetTask: Task<Void, Never>?
     private var chromeTask: Task<Void, Never>?
+    private var loadGeneration = 0
+    private var progressGeneration = 0
 
     init(
         dependencies: ReaderDependencies,
@@ -53,39 +56,54 @@ final class ReaderCoordinator: ObservableObject {
 
     deinit {
         progressTask?.cancel()
+        assetTask?.cancel()
         chromeTask?.cancel()
     }
 
     func load(route: ReaderRoute) async throws {
+        loadGeneration += 1
+        let generation = loadGeneration
+        progressGeneration += 1
+        progressTask?.cancel()
+        assetTask?.cancel()
         loadFailure = nil
         assetFailure = nil
         lastRoute = route
         do {
             let article = try await dependencies.articleRepository.readArticle(id: route.articleID)
+            guard isCurrentLoad(generation) else { return }
             self.article = article
             layout = ReaderTextLayout(article: article, image: nil)
 
-            // Persisted progress is deliberately read before route state is resolved.
             let persistedProgress = try await dependencies.articleRepository.readProgress(articleID: route.articleID)
-            let assets: [ReadingAsset]
-            do {
-                assets = try await dependencies.readingAssetRepository.readAssets(articleID: route.articleID)
-            } catch {
-                assets = []
-                assetFailure = .assetsFailed
-            }
-            self.assets = assets
+            guard isCurrentLoad(generation) else { return }
 
-            if let anchorID = route.anchorID,
-               let anchor = assets.first(where: { $0.anchor?.id == anchorID })?.anchor {
-                initialPosition = ReaderPosition(
-                    blockID: anchor.startBlockID,
-                    utf16Offset: anchor.startUTF16Offset
-                )
-            } else {
+            guard let anchorID = route.anchorID else {
+                // A normal reader route renders restored progress before assets finish.
+                initialPosition = persistedProgress
+                loadAssets(articleID: route.articleID, generation: generation)
+                return
+            }
+
+            do {
+                let assets = try await dependencies.readingAssetRepository.readAssets(articleID: route.articleID)
+                guard isCurrentLoad(generation) else { return }
+                self.assets = assets
+                if let anchor = assets.first(where: { $0.anchor?.id == anchorID })?.anchor {
+                    initialPosition = ReaderPosition(
+                        blockID: anchor.startBlockID,
+                        utf16Offset: anchor.startUTF16Offset
+                    )
+                } else {
+                    initialPosition = persistedProgress
+                }
+            } catch {
+                guard isCurrentLoad(generation) else { return }
+                assetFailure = .assetsFailed
                 initialPosition = persistedProgress
             }
         } catch {
+            guard isCurrentLoad(generation) else { return }
             loadFailure = .loadFailed
             throw error
         }
@@ -117,17 +135,21 @@ final class ReaderCoordinator: ObservableObject {
         guard position.blockID != nil else { return }
         lastQueuedPosition = position
         progressTask?.cancel()
+        progressGeneration += 1
+        let generation = progressGeneration
         progressTask = Task { @MainActor [weak self] in
             guard let self else { return }
             try? await Task.sleep(for: self.progressDebounce)
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, self.isCurrentProgress(generation) else { return }
             do {
                 try await self.dependencies.readingAssetRepository.upsertReadingProgress(
                     articleID: article.id,
                     position: position
                 )
+                guard self.isCurrentProgress(generation) else { return }
                 self.progressFailure = nil
             } catch {
+                guard self.isCurrentProgress(generation) else { return }
                 self.progressFailure = .progressFailed
             }
         }
@@ -145,10 +167,14 @@ final class ReaderCoordinator: ObservableObject {
 
     func refreshAssets() async {
         guard let article else { return }
+        let generation = loadGeneration
         do {
-            assets = try await dependencies.readingAssetRepository.readAssets(articleID: article.id)
+            let loadedAssets = try await dependencies.readingAssetRepository.readAssets(articleID: article.id)
+            guard isCurrentLoad(generation), self.article?.id == article.id else { return }
+            assets = loadedAssets
             assetFailure = nil
         } catch {
+            guard isCurrentLoad(generation), self.article?.id == article.id else { return }
             assetFailure = .assetsFailed
         }
     }
@@ -163,6 +189,8 @@ final class ReaderCoordinator: ObservableObject {
     func retryProgress() {
         guard let lastQueuedPosition, let article else { return }
         progressTask?.cancel()
+        progressGeneration += 1
+        let generation = progressGeneration
         progressTask = Task { @MainActor [weak self] in
             guard let self else { return }
             do {
@@ -170,10 +198,30 @@ final class ReaderCoordinator: ObservableObject {
                     articleID: article.id,
                     position: lastQueuedPosition
                 )
+                guard self.isCurrentProgress(generation) else { return }
                 self.progressFailure = nil
             } catch {
+                guard self.isCurrentProgress(generation) else { return }
                 self.progressFailure = .progressFailed
             }
         }
     }
+
+    private func loadAssets(articleID: UUID, generation: Int) {
+        assetTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let loadedAssets = try await self.dependencies.readingAssetRepository.readAssets(articleID: articleID)
+                guard self.isCurrentLoad(generation), self.article?.id == articleID else { return }
+                self.assets = loadedAssets
+                self.assetFailure = nil
+            } catch {
+                guard self.isCurrentLoad(generation), self.article?.id == articleID else { return }
+                self.assetFailure = .assetsFailed
+            }
+        }
+    }
+
+    private func isCurrentLoad(_ generation: Int) -> Bool { generation == loadGeneration }
+    private func isCurrentProgress(_ generation: Int) -> Bool { generation == progressGeneration }
 }

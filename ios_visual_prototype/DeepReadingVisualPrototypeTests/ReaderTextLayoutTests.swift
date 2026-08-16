@@ -80,6 +80,15 @@ final class ReaderTextLayoutTests: XCTestCase {
         XCTAssertNotNil(text.attribute(.backgroundColor, at: secondRange.location + 1, effectiveRange: nil))
     }
 
+    func testAnchorRejectsTitleSeparatorAndAttachmentOnlySelections() throws {
+        let firstRange = try XCTUnwrap(layout.range(forBlockID: firstBlockID))
+        let imageRange = try XCTUnwrap(layout.range(forBlockID: imageBlockID))
+
+        XCTAssertThrowsError(try layout.anchor(for: NSRange(location: 0, length: firstRange.location)))
+        XCTAssertThrowsError(try layout.anchor(for: NSRange(location: firstRange.upperBound, length: 2)))
+        XCTAssertThrowsError(try layout.anchor(for: imageRange))
+    }
+
     private var article: Article {
         Article(
             id: articleID, title: "标题", sourceName: "来源", contentChecksum: "checksum",

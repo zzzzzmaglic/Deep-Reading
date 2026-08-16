@@ -1,6 +1,18 @@
 import SwiftUI
 import UIKit
 
+struct ReaderScrollEventClassifier {
+    private var previousOffset: CGFloat = 0
+
+    mutating func direction(for offset: CGFloat, isUserDriven: Bool) -> ReaderCoordinator.ScrollDirection? {
+        defer { previousOffset = offset }
+        guard isUserDriven else { return nil }
+        if offset > previousOffset { return .down }
+        if offset < previousOffset { return .up }
+        return nil
+    }
+}
+
 struct ReaderTextView: UIViewRepresentable {
     let attributedText: NSAttributedString
     let requestedScrollRange: NSRange?
@@ -50,13 +62,16 @@ struct ReaderTextView: UIViewRepresentable {
               !NSEqualRanges(context.coordinator.lastScrollRange, requestedScrollRange) else { return }
         context.coordinator.lastScrollRange = requestedScrollRange
         DispatchQueue.main.async {
+            context.coordinator.isRestoringRange = true
             textView.scrollRangeToVisible(requestedScrollRange)
+            context.coordinator.isRestoringRange = false
         }
     }
 
     final class TextViewCoordinator: NSObject, UITextViewDelegate, UIGestureRecognizerDelegate {
         var lastScrollRange = NSRange(location: NSNotFound, length: 0)
-        private var previousOffset: CGFloat = 0
+        private var scrollClassifier = ReaderScrollEventClassifier()
+        fileprivate var isRestoringRange = false
         private var onVisibleUTF16Location: (Int) -> Void
         private var onScrollDirection: (ReaderCoordinator.ScrollDirection) -> Void
         private var onBodyTap: () -> Void
@@ -89,9 +104,10 @@ struct ReaderTextView: UIViewRepresentable {
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             let offset = scrollView.contentOffset.y
-            if offset > previousOffset { onScrollDirection(.down) }
-            if offset < previousOffset { onScrollDirection(.up) }
-            previousOffset = offset
+            let isUserDriven = !isRestoringRange && (scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating)
+            if let direction = scrollClassifier.direction(for: offset, isUserDriven: isUserDriven) {
+                onScrollDirection(direction)
+            }
 
             guard let textView = scrollView as? UITextView else { return }
             let point = CGPoint(

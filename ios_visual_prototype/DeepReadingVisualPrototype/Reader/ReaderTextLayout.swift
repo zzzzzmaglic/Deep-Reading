@@ -92,9 +92,8 @@ struct ReaderTextLayout {
               selection.upperBound <= baseText.length else {
             throw ReaderTextLayoutError.emptySelection
         }
-        let end = selection.upperBound
-        guard let start = endpoint(at: selection.location, preferringEnd: false),
-              let finish = endpoint(at: end, preferringEnd: true) else {
+        guard let start = textBlock(containing: selection.location),
+              let finish = textBlock(containing: selection.upperBound - 1) else {
             throw ReaderTextLayoutError.invalidOffset
         }
 
@@ -103,10 +102,10 @@ struct ReaderTextLayout {
             id: UUID(),
             assetID: UUID(),
             articleID: article.id,
-            startBlockID: start.blockID,
-            endBlockID: finish.blockID,
-            startUTF16Offset: start.offset,
-            endUTF16Offset: finish.offset,
+            startBlockID: start.id,
+            endBlockID: finish.id,
+            startUTF16Offset: selection.location - start.range.location,
+            endUTF16Offset: selection.upperBound - finish.range.location,
             selectedText: selected,
             contentChecksum: article.contentChecksum
         )
@@ -178,6 +177,13 @@ struct ReaderTextLayout {
             guard lower >= 0, upper >= lower, upper <= blockRange.length else { return nil }
             return NSRange(location: blockRange.location + lower, length: upper - lower)
         }
+    }
+
+    private func textBlock(containing location: Int) -> (id: UUID, range: NSRange)? {
+        orderedBlockIDs.first { blockID in
+            guard !imageBlockIDs.contains(blockID), let range = blockRanges[blockID] else { return false }
+            return location >= range.location && location < range.upperBound
+        }.flatMap { id in blockRanges[id].map { (id, $0) } }
     }
 
     private static let bodyParagraphStyle: NSParagraphStyle = {
