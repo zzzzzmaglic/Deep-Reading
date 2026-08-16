@@ -59,11 +59,21 @@ final class AppSessionStore: SessionAuthenticating, @unchecked Sendable {
         }
 
         let newSession = try await remote.signInAnonymously()
-        guard newSession.isUsableAnonymousSession,
-              let confirmedSession = try await remote.restoreSession(),
-              confirmedSession.isUsableAnonymousSession else {
+        guard newSession.isUsableAnonymousSession else {
             throw AppSessionStoreError.unavailableAnonymousSession
         }
+
+        if remote.currentSession()?.isUsableAnonymousSession == true {
+            return
+        }
+
+        if let restoredSession = try? await remote.restoreSession(),
+           restoredSession.isUsableAnonymousSession,
+           remote.currentSession()?.isUsableAnonymousSession == true {
+            return
+        }
+
+        throw AppSessionStoreError.unavailableAnonymousSession
     }
 
     func ensureSession() async throws {
@@ -73,25 +83,31 @@ final class AppSessionStore: SessionAuthenticating, @unchecked Sendable {
 
 private final class LiveAppSessionRemote: AppSessionRemote, @unchecked Sendable {
     private let client: SupabaseClient
+    private var recentSession: AppSession?
 
     init(client: SupabaseClient) {
         self.client = client
     }
 
     func currentSession() -> AppSession? {
-        client.auth.currentSession.map(AppSession.init)
+        client.auth.currentSession.map(AppSession.init) ?? recentSession
     }
 
     func restoreSession() async throws -> AppSession? {
-        AppSession(session: try await client.auth.session)
+        let session = AppSession(session: try await client.auth.session)
+        recentSession = session
+        return session
     }
 
     func signOut() async throws {
         try await client.auth.signOut()
+        recentSession = nil
     }
 
     func signInAnonymously() async throws -> AppSession {
-        AppSession(session: try await client.auth.signInAnonymously())
+        let session = AppSession(session: try await client.auth.signInAnonymously())
+        recentSession = session
+        return session
     }
 }
 

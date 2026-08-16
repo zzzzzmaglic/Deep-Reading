@@ -83,6 +83,9 @@ final class ReaderCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(coordinator.article?.id, articleID)
         XCTAssertEqual(coordinator.initialPosition, ReaderPosition(blockID: blockID, utf16Offset: 1))
+        for _ in 0 ..< 20 where coordinator.assetFailure == nil {
+            try await Task.sleep(for: .milliseconds(10))
+        }
         XCTAssertEqual(coordinator.assetFailure, .assetsFailed)
     }
 
