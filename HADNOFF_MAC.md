@@ -4,6 +4,14 @@
 
 ## 当前交接
 
+### Task 10.4 原生知识库根导航 -> 已实现，等待真实本机 UI 验收
+
+- 日期：2026-08-23
+- 已完成：`AppRuntime` 以同一个 `SupabaseClient` 注入文章、阅读资产和知识库仓储；ready 根视图改为默认选中“知识库”的原生 `TabView`。知识库拥有唯一 `NavigationStack` path：集合/标签详情 push 阅读器，阅读器返回仅 pop 当前 route；汇总页“在文中显示”先 pop 汇总再替换栈顶 reader route，保留原详情上下文。阅读器与汇总页在该路径上隐藏 Tab Bar。迁移为 `202608230001_task10_knowledge_base.sql`。
+- 验证：iPhone 16（实际 Simulator 名称 `Deep Reading · iPhone 16`、iOS 26.5、ARM64）完整 `xcodebuild test` exit 0、Debug `xcodebuild build` exit 0；无公开本机配置时三条 UI 流程（Task 6–9 两条、新增知识库一条）以显式 skip 退出，全部 XCTest 其余用例通过；不写入凭据。`git diff --check` 当前通过。
+- 手工验收：未执行。真实 live UI flow 仍需要以仅运行时注入的 `SUPABASE_URL` / `SUPABASE_ANON_KEY` 运行；本轮不执行或申请 `supabase db reset`。`supabase status -o env` 提示 imgproxy/pooler 停止；这与此前核心匿名读取可用时的非核心状态一致，作为 live UI 验证 caveat 记录，不视为代码缺陷。
+- 风险 / 下一步：需要在现有验收数据保持不变的情况下执行真实标签资产卡片→来源锚点阅读器→返回标签详情流程，并完成 Figma 12–18 手工视觉对照。现有 `UIScreen.main` 弃用警告未扩大范围处理；`supabase/.branches/` 与 `supabase/.temp/` 不纳入提交。
+
 ### Task 10 原生知识库实施计划 -> 等待执行方式确认
 
 - 日期：2026-08-23

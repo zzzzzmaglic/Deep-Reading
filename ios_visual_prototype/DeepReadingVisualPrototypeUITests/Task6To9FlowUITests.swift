@@ -2,9 +2,7 @@ import XCTest
 
 final class Task6To9FlowUITests: XCTestCase {
     func testSummaryBackControlReturnsToTheReader() throws {
-        let app = XCUIApplication()
-        app.launchArguments.append("-ui-test-seed-highlight")
-        app.launch()
+        let app = try launchSeededReader()
 
         let reader = app.textViews["reader-text-view"]
         XCTAssertTrue(reader.waitForExistence(timeout: 12))
@@ -26,16 +24,13 @@ final class Task6To9FlowUITests: XCTestCase {
     }
 
     func testReaderAssetSummaryReturnsToAnchoredReader() throws {
-        let app = XCUIApplication()
+        let app = try launchSeededReader()
         // The local Debug configuration is compiled into the app target. Do
         // not move public runtime values through the test runner's process
         // environment: Xcode does not inherit that environment into UI tests.
         // Native TextKit selection handles are not deterministic in XCUITest.
         // DEBUG receives this explicit hook, which calls the production
         // repository's create-highlight RPC for the real local anonymous user.
-        app.launchArguments.append("-ui-test-seed-highlight")
-        app.launch()
-
         let reader = app.textViews["reader-text-view"]
         XCTAssertTrue(reader.waitForExistence(timeout: 12))
 
@@ -75,5 +70,17 @@ final class Task6To9FlowUITests: XCTestCase {
                 .firstMatch
                 .exists
         )
+    }
+
+    private func launchSeededReader() throws -> XCUIApplication {
+        let environment = ProcessInfo.processInfo.environment
+        guard let url = environment["SUPABASE_URL"], let anonKey = environment["SUPABASE_ANON_KEY"] else {
+            throw XCTSkip("Local Supabase configuration was not supplied to the UI test runner.")
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment = ["SUPABASE_URL": url, "SUPABASE_ANON_KEY": anonKey]
+        app.launchArguments.append("-ui-test-seed-highlight")
+        app.launch()
+        return app
     }
 }

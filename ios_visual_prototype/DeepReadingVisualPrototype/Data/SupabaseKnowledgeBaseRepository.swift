@@ -27,6 +27,10 @@ final class SupabaseKnowledgeBaseRepository: KnowledgeBaseRepository, @unchecked
         self.remote = remote
     }
 
+    var clientIdentity: ObjectIdentifier? {
+        client.map(ObjectIdentifier.init)
+    }
+
     func readHome() async throws -> KnowledgeHomeSnapshot {
         async let collectionRows = remote.readRows(from: "collections")
         async let membershipRows = remote.readRows(from: "article_collections")

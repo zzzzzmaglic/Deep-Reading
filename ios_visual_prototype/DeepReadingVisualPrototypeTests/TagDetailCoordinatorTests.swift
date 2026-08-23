@@ -10,13 +10,13 @@ final class TagDetailCoordinatorTests: XCTestCase {
         XCTAssertEqual(remove.title, "移除所选阅读资产？")
         XCTAssertEqual(remove.message, "这只会移除所选资产与当前标签的关联；资产和其他标签会保留。")
         XCTAssertEqual(remove.confirmTitle, "移除")
-        XCTAssertEqual(remove.confirmAccessibilityIdentifier, "tag-remove-confirm")
+        XCTAssertEqual(remove.confirmAccessibilityIdentifier, "knowledge-confirm-remove")
         XCTAssertFalse(remove.isDestructive)
 
         XCTAssertEqual(delete.title, "删除所选阅读资产？")
         XCTAssertEqual(delete.message, "删除后将永久移除所选阅读资产，且无法恢复。")
         XCTAssertEqual(delete.confirmTitle, "删除")
-        XCTAssertEqual(delete.confirmAccessibilityIdentifier, "tag-delete-confirm")
+        XCTAssertEqual(delete.confirmAccessibilityIdentifier, "knowledge-confirm-delete")
         XCTAssertTrue(delete.isDestructive)
     }
 

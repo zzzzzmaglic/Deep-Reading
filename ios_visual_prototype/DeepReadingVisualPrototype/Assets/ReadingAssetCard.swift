@@ -155,6 +155,18 @@ struct ReadingAssetCard: View {
                     requestClose()
                 }
 
+            Button(action: requestClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .bold))
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("关闭标注卡片")
+            .accessibilityIdentifier("asset-card-dismiss")
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            .padding(.trailing, 24)
+            .padding(.top, 84)
+
             card
                 .padding(.horizontal, 24)
                 .gesture(
@@ -175,6 +187,7 @@ struct ReadingAssetCard: View {
             }
 
         }
+        .accessibilityIdentifier("reading-asset-card")
         .task { await controller.loadAvailableTags(ensuring: debugDemoTagNames) }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
             guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }

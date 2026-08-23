@@ -13,13 +13,13 @@ struct TagDetailSelectionConfirmation {
             title = "移除所选阅读资产？"
             message = "这只会移除所选资产与当前标签的关联；资产和其他标签会保留。"
             confirmTitle = "移除"
-            confirmAccessibilityIdentifier = "tag-remove-confirm"
+            confirmAccessibilityIdentifier = "knowledge-confirm-remove"
             isDestructive = false
         case .deleteAssets:
             title = "删除所选阅读资产？"
             message = "删除后将永久移除所选阅读资产，且无法恢复。"
             confirmTitle = "删除"
-            confirmAccessibilityIdentifier = "tag-delete-confirm"
+            confirmAccessibilityIdentifier = "knowledge-confirm-delete"
             isDestructive = true
         }
     }
@@ -80,7 +80,8 @@ struct TagDetailScreen: View {
                         isSelected: coordinator.selectedAssetIDs.contains(asset.id),
                         open: { open(asset) },
                         showInArticle: coordinator.routeToSource(for: asset).map { route in { showInArticle(route) } },
-                        accessibilityPrefix: "tag"
+                        accessibilityPrefix: "knowledge",
+                        sourceAccessibilityPrefix: "knowledge"
                     )
                     .simultaneousGesture(selectionGesture(for: asset))
                 }
@@ -129,6 +130,7 @@ struct TagDetailScreen: View {
                 GlassIconControl(symbol: "chevron.left", label: "返回", action: dismiss)
                 Spacer()
                 GlassIconControl(symbol: "square.and.pencil", label: "添加独立型笔记", action: beginStandaloneNote)
+                    .accessibilityIdentifier("knowledge-open-standalone-note")
             }
             .padding(.horizontal, 20)
             .padding(.top, 52)

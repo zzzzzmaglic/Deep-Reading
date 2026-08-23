@@ -57,10 +57,12 @@ enum AppRootScreen: Equatable {
 protocol AppRuntimeBootstrapping: AnyObject {
     func bootstrap() async throws
     var readerDependencies: ReaderDependencies? { get }
+    var knowledgeDependencies: KnowledgeDependencies? { get }
 }
 
 extension AppRuntimeBootstrapping {
     var readerDependencies: ReaderDependencies? { nil }
+    var knowledgeDependencies: KnowledgeDependencies? { nil }
 }
 
 final class AppRuntime: AppRuntimeBootstrapping, @unchecked Sendable {
@@ -68,7 +70,9 @@ final class AppRuntime: AppRuntimeBootstrapping, @unchecked Sendable {
     let sessionStore: AppSessionStore
     let articleRepository: SupabaseArticleRepository
     let readingAssetRepository: SupabaseReadingAssetRepository
+    let knowledgeRepository: SupabaseKnowledgeBaseRepository
     let readerDependencies: ReaderDependencies?
+    let knowledgeDependencies: KnowledgeDependencies?
     private let sessionBootstrap: @Sendable () async throws -> Void
 
     convenience init(configuration: SupabaseRuntimeConfiguration) {
@@ -84,9 +88,14 @@ final class AppRuntime: AppRuntimeBootstrapping, @unchecked Sendable {
         self.sessionStore = sessionStore
         articleRepository = SupabaseArticleRepository(client: client)
         readingAssetRepository = SupabaseReadingAssetRepository(client: client)
+        knowledgeRepository = SupabaseKnowledgeBaseRepository(client: client)
         readerDependencies = ReaderDependencies(
             articleRepository: articleRepository,
             readingAssetRepository: readingAssetRepository
+        )
+        knowledgeDependencies = KnowledgeDependencies(
+            knowledgeRepository: knowledgeRepository,
+            readerDependencies: readerDependencies!
         )
         self.sessionBootstrap = sessionBootstrap ?? { [sessionStore] in
             try await sessionStore.bootstrap()
@@ -103,8 +112,23 @@ enum AppRootRenderedElement: Equatable {
     case button(String)
 }
 
-enum AppNavigationDestination: Hashable {
+enum AppTab: Hashable {
+    case home
+    case knowledge
+
+    static let defaultSelection = AppTab.knowledge
+}
+
+enum KnowledgeNavigationDestination: Hashable {
+    case collection(UUID)
+    case tag(UUID)
+    case reader(ReaderRoute)
     case summary(articleID: UUID, origin: ReaderOrigin)
+}
+
+struct KnowledgeDependencies: @unchecked Sendable {
+    let knowledgeRepository: any KnowledgeBaseRepository
+    let readerDependencies: ReaderDependencies
 }
 
 /// The reading flow is intentionally outside Stage F. AppRoot still owns the
@@ -123,9 +147,7 @@ struct AppRootView: View {
     private let originDismissal: ReaderOriginDismissal
     @State private var screen = AppRootScreen.loading
     @State private var runtime: (any AppRuntimeBootstrapping)?
-    @State private var readerRoute = ReaderRoute.localSeed
-    @State private var navigationPath: [AppNavigationDestination] = []
-    @State private var readerAssetRefreshRevision = 0
+    @State private var selectedTab = AppTab.defaultSelection
 
     init(
         configurationLoader: @escaping () throws -> SupabaseRuntimeConfiguration = {
@@ -182,39 +204,20 @@ struct AppRootView: View {
                 ProgressView("正在准备阅读服务…")
                     .task { await bootstrapRuntime() }
             case .ready:
-                if let dependencies = runtime?.readerDependencies {
-                    NavigationStack(path: $navigationPath) {
-                        ReaderScreen(
-                            route: readerRoute,
-                            dependencies: dependencies,
-                            onOpenSummary: { route in
-                                navigationPath.append(.summary(articleID: route.articleID, origin: route.origin))
-                            },
-                            onBack: originDismissal.dismiss,
-                            assetRefreshRevision: readerAssetRefreshRevision
-                        )
-                        .navigationDestination(for: AppNavigationDestination.self) { destination in
-                            switch destination {
-                            case let .summary(articleID, origin):
-                                ArticleAssetSummaryScreen(
-                                    articleID: articleID,
-                                    origin: origin,
-                                    dependencies: dependencies,
-                                    dismissToReader: { navigationPath.removeAll() },
-                                    showInArticle: { anchoredRoute in
-                                        navigationPath.removeAll()
-                                        readerRoute = anchoredRoute
-                                    },
-                                    refreshReaderAssets: { readerAssetRefreshRevision += 1 }
-                                )
-                            }
-                        }
+                if let dependencies = runtime?.knowledgeDependencies {
+                    TabView(selection: $selectedTab) {
+                        HomeUnavailableScreen()
+                            .tabItem { Label("首页", systemImage: "house") }
+                            .tag(AppTab.home)
+                        KnowledgeNavigationContainer(dependencies: dependencies)
+                            .tabItem { Label("知识库", systemImage: "books.vertical") }
+                            .tag(AppTab.knowledge)
                     }
-                    .onAppear { renderObserver?(.text("Reader runtime ready")) }
+                    .onAppear { renderObserver?(.text("Knowledge runtime ready")) }
                 } else {
-                    Text("Reader runtime ready")
+                    Text("Knowledge runtime ready")
                         .accessibilityIdentifier("app-root-runtime-ready")
-                        .onAppear { renderObserver?(.text("Reader runtime ready")) }
+                        .onAppear { renderObserver?(.text("Knowledge runtime ready")) }
                 }
             }
         }
@@ -248,5 +251,82 @@ struct AppRootView: View {
         } catch {
             return .configurationFailure(.missingValue("SUPABASE_URL"))
         }
+    }
+}
+
+private struct HomeUnavailableScreen: View {
+    var body: some View {
+        ContentUnavailableView("阅读流尚未实现", systemImage: "house")
+            .accessibilityIdentifier("knowledge-home-placeholder")
+    }
+}
+
+private struct KnowledgeNavigationContainer: View {
+    let dependencies: KnowledgeDependencies
+    @State private var path: [KnowledgeNavigationDestination] = []
+    @State private var readerAssetRefreshRevision = 0
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            KnowledgeHomeScreen(
+                repository: dependencies.knowledgeRepository,
+                openCollection: { path.append(.collection($0.id)) },
+                openTag: { path.append(.tag($0.id)) }
+            )
+            .accessibilityIdentifier("knowledge-home")
+            .navigationDestination(for: KnowledgeNavigationDestination.self) { destination in
+                switch destination {
+                case let .collection(id):
+                    CollectionDetailScreen(
+                        collectionID: id,
+                        repository: dependencies.knowledgeRepository,
+                        dismiss: popCurrentDestination,
+                        openArticle: { article in
+                            path.append(.reader(ReaderRoute(articleID: article.id, anchorID: nil, origin: .knowledge)))
+                        }
+                    )
+                case let .tag(id):
+                    TagDetailScreen(
+                        tagID: id,
+                        dependencies: dependencies.readerDependencies,
+                        dismiss: popCurrentDestination,
+                        showInArticle: { path.append(.reader($0)) }
+                    )
+                case let .reader(route):
+                    ReaderScreen(
+                        route: route,
+                        dependencies: dependencies.readerDependencies,
+                        onOpenSummary: { route in
+                            path.append(.summary(articleID: route.articleID, origin: route.origin))
+                        },
+                        onBack: { _ in popCurrentDestination() },
+                        assetRefreshRevision: readerAssetRefreshRevision
+                    )
+                    .toolbar(.hidden, for: .tabBar)
+                case let .summary(articleID, origin):
+                    ArticleAssetSummaryScreen(
+                        articleID: articleID,
+                        origin: origin,
+                        dependencies: dependencies.readerDependencies,
+                        dismissToReader: popCurrentDestination,
+                        showInArticle: replaceReaderAfterDismissingSummary,
+                        refreshReaderAssets: { readerAssetRefreshRevision += 1 }
+                    )
+                    .toolbar(.hidden, for: .tabBar)
+                }
+            }
+        }
+    }
+
+    private func popCurrentDestination() {
+        guard !path.isEmpty else { return }
+        path.removeLast()
+    }
+
+    private func replaceReaderAfterDismissingSummary(with route: ReaderRoute) {
+        guard case .summary = path.last else { return }
+        path.removeLast()
+        guard !path.isEmpty else { return }
+        path[path.count - 1] = .reader(route)
     }
 }

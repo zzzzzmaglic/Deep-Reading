@@ -18,7 +18,7 @@ final class AppRuntimeTests: XCTestCase {
         controller.view.layoutIfNeeded()
         window.layoutIfNeeded()
         XCTAssertEqual(runtime.bootstrapCalls, 1)
-        XCTAssertTrue(recorder.elements.contains(.text("Reader runtime ready")))
+        XCTAssertTrue(recorder.elements.contains(.text("Knowledge runtime ready")))
     }
 
     func testAppRootRendersRetryWhenRuntimeBootstrapFails() async throws {
@@ -58,9 +58,17 @@ final class AppRuntimeTests: XCTestCase {
         controller.view.setNeedsLayout()
         controller.view.layoutIfNeeded()
 
-        XCTAssertTrue(recorder.elements.contains(.text("Reader runtime ready")))
+        XCTAssertTrue(recorder.elements.contains(.text("Knowledge runtime ready")))
         XCTAssertNotNil(retainedRuntime)
         XCTAssertNotNil(retainedClient)
+    }
+
+    func testKnowledgeRuntimeSharesClientAndKnowledgeIsTheDefaultTab() throws {
+        let client = makeClient()
+        let runtime = AppRuntime(client: client, sessionBootstrap: {})
+
+        XCTAssertEqual(ObjectIdentifier(client), try XCTUnwrap(runtime.knowledgeRepository.clientIdentity))
+        XCTAssertEqual(AppTab.defaultSelection, .knowledge)
     }
 
     func testReaderUsesAScrollableViewportAndKeepsOffsetWhenChromeHides() async throws {

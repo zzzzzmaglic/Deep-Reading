@@ -67,19 +67,22 @@ struct ReadingAssetListRow: View {
     let open: () -> Void
     let showInArticle: (() -> Void)?
     let accessibilityPrefix: String
+    let sourceAccessibilityPrefix: String?
 
     init(
         asset: ReadingAsset,
         isSelected: Bool,
         open: @escaping () -> Void,
         showInArticle: (() -> Void)? = nil,
-        accessibilityPrefix: String = "summary"
+        accessibilityPrefix: String = "summary",
+        sourceAccessibilityPrefix: String? = nil
     ) {
         self.asset = asset
         self.isSelected = isSelected
         self.open = open
         self.showInArticle = showInArticle
         self.accessibilityPrefix = accessibilityPrefix
+        self.sourceAccessibilityPrefix = sourceAccessibilityPrefix
     }
 
     var body: some View {
@@ -104,7 +107,7 @@ struct ReadingAssetListRow: View {
                 .padding(.trailing, 20)
                 .frame(maxWidth: .infinity, minHeight: ReadingAssetListRowLayout.actionHeight, maxHeight: ReadingAssetListRowLayout.actionHeight, alignment: .leading)
                 .frame(maxHeight: .infinity, alignment: .bottomLeading)
-                .accessibilityIdentifier("\(accessibilityPrefix)-show-in-article-\(asset.id.uuidString)")
+                .accessibilityIdentifier(sourceAccessibilityIdentifier)
             }
         }
         .frame(maxWidth: .infinity, minHeight: specification.cardHeight, maxHeight: specification.cardHeight, alignment: .leading)
@@ -114,6 +117,12 @@ struct ReadingAssetListRow: View {
     }
 
     private var primaryText: String { asset.anchor?.selectedText ?? asset.noteContent ?? "" }
+    private var sourceAccessibilityIdentifier: String {
+        if let sourceAccessibilityPrefix {
+            return "\(sourceAccessibilityPrefix)-source-\(asset.id.uuidString)"
+        }
+        return "\(accessibilityPrefix)-show-in-article-\(asset.id.uuidString)"
+    }
     private var accentColor: Color { asset.anchor == nil ? Color(red: 0.478, green: 0.643, blue: 0.906) : Color(red: 0.965, green: 0.812, blue: 0.282) }
     private var primaryAreaHeight: CGFloat { asset.anchor == nil ? specification.cardHeight : ReadingAssetListRowLayout.linkedNoteVisibleHeight }
     private var specification: ReadingAssetListRowSpecification { ReadingAssetListRowLayout.specification(for: asset.kind) }

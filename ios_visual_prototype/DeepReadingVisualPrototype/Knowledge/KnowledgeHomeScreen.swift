@@ -3,11 +3,17 @@ import SwiftUI
 struct KnowledgeHomeScreen: View {
     @StateObject private var coordinator: KnowledgeHomeCoordinator
     let openCollection: (KnowledgeCollection) -> Void
+    let openTag: (Tag) -> Void
     @State private var compactTitle = false
 
-    init(repository: any KnowledgeBaseRepository, openCollection: @escaping (KnowledgeCollection) -> Void = { _ in }) {
+    init(
+        repository: any KnowledgeBaseRepository,
+        openCollection: @escaping (KnowledgeCollection) -> Void = { _ in },
+        openTag: @escaping (Tag) -> Void = { _ in }
+    ) {
         _coordinator = StateObject(wrappedValue: KnowledgeHomeCoordinator(repository: repository))
         self.openCollection = openCollection
+        self.openTag = openTag
     }
 
     var body: some View {
@@ -26,12 +32,24 @@ struct KnowledgeHomeScreen: View {
                         .padding(.leading, 24)
                     groupHeader(header: .collections, title: "推文合集", expanded: coordinator.collectionsExpanded, toggle: coordinator.toggleCollections)
                         .padding(.top, 20)
-                    KnowledgeGroupList(items: coordinator.visibleCollections, isSystem: \.isSystem, title: \.name) { collection in
+                    KnowledgeGroupList(
+                        items: coordinator.visibleCollections,
+                        isSystem: \.isSystem,
+                        title: \.name,
+                        accessibilityIdentifier: { "knowledge-collection-\($0.id.uuidString)" }
+                    ) { collection in
                         openCollection(collection)
                     }
                     groupHeader(header: .tags, title: "标签", expanded: coordinator.tagsExpanded, toggle: coordinator.toggleTags)
                         .padding(.top, 30)
-                    KnowledgeGroupList(items: coordinator.visibleTags, isSystem: \.isSystem, title: \.name) { _ in }
+                    KnowledgeGroupList(
+                        items: coordinator.visibleTags,
+                        isSystem: \.isSystem,
+                        title: \.name,
+                        accessibilityIdentifier: { "knowledge-tag-\($0.name)" }
+                    ) { tag in
+                        openTag(tag)
+                    }
                     Spacer(minLength: 128)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -95,6 +113,7 @@ private struct KnowledgeGroupList<Item: Identifiable>: View {
     let items: [Item]
     let isSystem: KeyPath<Item, Bool>
     let title: KeyPath<Item, String>
+    let accessibilityIdentifier: (Item) -> String
     let select: (Item) -> Void
 
     var body: some View {
@@ -112,6 +131,7 @@ private struct KnowledgeGroupList<Item: Identifiable>: View {
                     .frame(height: KnowledgeVisualTokens.rowHeight)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier(accessibilityIdentifier(item))
                 if item.id != items.last?.id { Divider().padding(.leading, 16).overlay(KnowledgeVisualTokens.divider) }
             }
         }
