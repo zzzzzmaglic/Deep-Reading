@@ -28,6 +28,26 @@ protocol ReadingAssetRepository: Sendable {
     func createTag(name: String) async throws -> Tag
     func saveReadingAsset(id: UUID, noteContent: String?, tagIDs: [UUID]) async throws -> ReadingAsset
     func createStandaloneNoteWithTags(articleID: UUID?, noteContent: String, tagIDs: [UUID]) async throws -> ReadingAsset
+    func removeAssetsFromTag(tagID: UUID, assetIDs: [UUID]) async throws
+    func deleteReadingAssets(ids: [UUID]) async throws
+}
+
+protocol KnowledgeBaseRepository: Sendable {
+    func readHome() async throws -> KnowledgeHomeSnapshot
+    func readCollection(id: UUID) async throws -> KnowledgeCollection
+    func readCollectionArticles(collectionID: UUID) async throws -> [KnowledgeArticlePreview]
+    func readArticleTitles(ids: Set<UUID>) async throws -> [UUID: String]
+    func removeArticlesFromCollection(collectionID: UUID, articleIDs: [UUID]) async throws
+}
+
+extension ReadingAssetRepository {
+    func removeAssetsFromTag(tagID: UUID, assetIDs: [UUID]) async throws {
+        throw CancellationError()
+    }
+
+    func deleteReadingAssets(ids: [UUID]) async throws {
+        throw CancellationError()
+    }
 }
 
 protocol SessionAuthenticating: Sendable {

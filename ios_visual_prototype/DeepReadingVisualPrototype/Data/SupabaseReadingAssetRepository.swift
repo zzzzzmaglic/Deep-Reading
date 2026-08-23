@@ -129,6 +129,23 @@ final class SupabaseReadingAssetRepository: ReadingAssetRepository, @unchecked S
         )
     }
 
+    func removeAssetsFromTag(tagID: UUID, assetIDs: [UUID]) async throws {
+        try await remote.rpc(
+            name: "remove_assets_from_tag",
+            parameters: [
+                "p_tag_id": tagID.uuidString,
+                "p_asset_ids": assetIDs.map(\.uuidString),
+            ]
+        )
+    }
+
+    func deleteReadingAssets(ids: [UUID]) async throws {
+        try await remote.rpc(
+            name: "delete_reading_assets",
+            parameters: ["p_asset_ids": ids.map(\.uuidString)]
+        )
+    }
+
     func upsertReadingProgress(articleID: UUID, position: ReaderPosition) async throws {
         try await remote.rpc(
             name: "upsert_reading_progress",
