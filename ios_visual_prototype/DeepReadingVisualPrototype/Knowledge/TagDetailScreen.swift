@@ -1,5 +1,30 @@
 import SwiftUI
 
+struct TagDetailSelectionConfirmation {
+    let title: String
+    let message: String
+    let confirmTitle: String
+    let confirmAccessibilityIdentifier: String
+    let isDestructive: Bool
+
+    init(action: TagSelectionAction) {
+        switch action {
+        case .removeAssociation:
+            title = "移除所选阅读资产？"
+            message = "这只会移除所选资产与当前标签的关联；资产和其他标签会保留。"
+            confirmTitle = "移除"
+            confirmAccessibilityIdentifier = "tag-remove-confirm"
+            isDestructive = false
+        case .deleteAssets:
+            title = "删除所选阅读资产？"
+            message = "删除后将永久移除所选阅读资产，且无法恢复。"
+            confirmTitle = "删除"
+            confirmAccessibilityIdentifier = "tag-delete-confirm"
+            isDestructive = true
+        }
+    }
+}
+
 struct TagDetailScreen: View {
     let tagID: UUID
     let dependencies: ReaderDependencies
@@ -35,17 +60,15 @@ struct TagDetailScreen: View {
                 )
                 .id(cardToken)
             }
+
+            if presentsSelectionConfirmation {
+                selectionConfirmation
+            }
         }
         .overlay(alignment: .bottom) { selectionToolbar }
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .task { await coordinator.load(tagID: tagID) }
-        .alert(selectionAlertTitle, isPresented: $presentsSelectionConfirmation) {
-            Button("取消", role: .cancel) {}
-            Button(selectionToolbarTitle, role: coordinator.selectionAction == .deleteAssets ? .destructive : nil) {
-                Task { _ = await coordinator.applySelectionAction() }
-            }
-        } message: { Text(selectionAlertMessage) }
     }
 
     private var assetList: some View {
@@ -82,6 +105,20 @@ struct TagDetailScreen: View {
         }
     }
 
+    private var selectionConfirmation: some View {
+        let confirmation = TagDetailSelectionConfirmation(action: coordinator.selectionAction)
+        return AssetCardConfirmationDialog(
+            title: confirmation.title,
+            message: confirmation.message,
+            primaryTitle: "取消",
+            primaryAction: { presentsSelectionConfirmation = false },
+            destructiveTitle: confirmation.confirmTitle,
+            destructiveAction: confirmSelection,
+            isOperationInFlight: coordinator.isMutating,
+            destructiveAccessibilityIdentifier: confirmation.confirmAccessibilityIdentifier
+        )
+    }
+
     private var detailTopChrome: some View {
         ZStack {
             Text(coordinator.tag?.name ?? "标签")
@@ -109,12 +146,6 @@ struct TagDetailScreen: View {
     }
 
     private var selectionToolbarTitle: String { coordinator.selectionAction == .deleteAssets ? "删除" : "移除" }
-    private var selectionAlertTitle: String { coordinator.selectionAction == .deleteAssets ? "删除所选阅读资产？" : "移除所选阅读资产？" }
-    private var selectionAlertMessage: String {
-        coordinator.selectionAction == .deleteAssets
-            ? "删除后将永久移除所选阅读资产，且无法恢复。"
-            : "这只会移除所选资产与当前标签的关联；资产和其他标签会保留。"
-    }
 
     private func selectionGesture(for asset: ReadingAsset) -> some Gesture {
         DragGesture(minimumDistance: 24).onEnded { value in
@@ -132,6 +163,14 @@ struct TagDetailScreen: View {
     private func beginStandaloneNote() {
         cardToken += 1
         coordinator.beginStandaloneNote()
+    }
+
+    private func confirmSelection() {
+        Task {
+            if await coordinator.applySelectionAction() {
+                presentsSelectionConfirmation = false
+            }
+        }
     }
 
     private func refreshAfterCardMutation() {

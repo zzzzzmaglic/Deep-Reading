@@ -3,6 +3,23 @@ import XCTest
 
 @MainActor
 final class TagDetailCoordinatorTests: XCTestCase {
+    func testSelectionConfirmationUsesDistinctRemoveAndDestructiveDeleteSemantics() {
+        let remove = TagDetailSelectionConfirmation(action: .removeAssociation)
+        let delete = TagDetailSelectionConfirmation(action: .deleteAssets)
+
+        XCTAssertEqual(remove.title, "移除所选阅读资产？")
+        XCTAssertEqual(remove.message, "这只会移除所选资产与当前标签的关联；资产和其他标签会保留。")
+        XCTAssertEqual(remove.confirmTitle, "移除")
+        XCTAssertEqual(remove.confirmAccessibilityIdentifier, "tag-remove-confirm")
+        XCTAssertFalse(remove.isDestructive)
+
+        XCTAssertEqual(delete.title, "删除所选阅读资产？")
+        XCTAssertEqual(delete.message, "删除后将永久移除所选阅读资产，且无法恢复。")
+        XCTAssertEqual(delete.confirmTitle, "删除")
+        XCTAssertEqual(delete.confirmAccessibilityIdentifier, "tag-delete-confirm")
+        XCTAssertTrue(delete.isDestructive)
+    }
+
     func testNormalTagSelectionRemovesOnlyThatTagAssociation() async {
         let fixture = TagDetailFixture()
         let repository = TagDetailTestRepository(tags: [fixture.systemTag, fixture.normalTag], assets: [fixture.asset])
