@@ -4,7 +4,7 @@ import XCTest
 @MainActor
 final class ArticleAssetSummaryCoordinatorTests: XCTestCase {
     func testLinkedNoteSummaryLayoutKeepsItsNoteInTheReservedThreeLineQuoteSlot() {
-        let layout = SummaryAssetRowLayout.linkedNoteContentLayout
+        let layout = ReadingAssetListRowLayout.linkedNoteContentLayout
 
         XCTAssertEqual(layout.quoteTopOffset, 34)
         XCTAssertEqual(layout.noteTopOffset, 94)
@@ -13,7 +13,7 @@ final class ArticleAssetSummaryCoordinatorTests: XCTestCase {
     }
 
     func testStandaloneSummaryLayoutMovesOnlyItsContentSlotDownTwoPoints() {
-        let layout = SummaryAssetRowLayout.standaloneNoteContentLayout
+        let layout = ReadingAssetListRowLayout.standaloneNoteContentLayout
 
         XCTAssertEqual(layout.contentTopOffset, 37)
         XCTAssertEqual(layout.accentTopOffset, 37)
@@ -21,16 +21,16 @@ final class ArticleAssetSummaryCoordinatorTests: XCTestCase {
     }
 
     func testSummaryRowLayoutKeepsFixedCardsAndUsesTheApprovedContentLimits() {
-        let linked = SummaryAssetRowLayout.specification(for: .linkedNote)
-        let standalone = SummaryAssetRowLayout.specification(for: .standaloneNote)
+        let linked = ReadingAssetListRowLayout.specification(for: .linkedNote)
+        let standalone = ReadingAssetListRowLayout.specification(for: .standaloneNote)
 
         XCTAssertEqual(linked.cardHeight, 169)
         XCTAssertEqual(standalone.cardHeight, 169)
         XCTAssertEqual(linked.primaryTextLineLimit, 3)
         XCTAssertEqual(linked.noteTextLineLimit, 2)
         XCTAssertGreaterThanOrEqual(
-            SummaryAssetRowLayout.linkedNoteVisibleHeight,
-            SummaryAssetRowLayout.linkedNoteContentLayout.noteTopOffset + SummaryAssetRowLayout.twoLineNoteHeight
+            ReadingAssetListRowLayout.linkedNoteVisibleHeight,
+            ReadingAssetListRowLayout.linkedNoteContentLayout.noteTopOffset + ReadingAssetListRowLayout.twoLineNoteHeight
         )
         XCTAssertEqual(standalone.primaryTextLineLimit, 6)
         XCTAssertNil(standalone.noteTextLineLimit)
