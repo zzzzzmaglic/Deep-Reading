@@ -36,3 +36,9 @@ Date: 2026-08-23
 - Fix: in DEBUG only, `-ui-test-open-local-seed-reader` initializes the existing knowledge navigation path with a `.knowledge`-origin local seed reader route. The app still launches to the default knowledge home without that argument and in non-DEBUG builds. Both legacy reader UI helpers and the knowledge UI flow add the argument with `-ui-test-seed-highlight`.
 - Fix: `knowledge-tag-{UUID}` now mirrors the stable UUID collection ID convention. The UI flow waits for the first UUID-backed system-tag row after returning to knowledge home, then verifies the tag detail survives the anchored reader round trip.
 - Red/green evidence: new AppRuntime tests first failed to compile because the test-only path and identifier helpers did not exist; after the minimal implementation, focused AppRuntime/knowledge-UI compilation tests, full `xcodebuild test`, Debug `xcodebuild build`, and `git diff --check` all passed on the iPhone 16 iOS 26.5 simulator.
+
+## Final rereview fix round 2
+
+- Root cause: `testSummaryBackControlReturnsToTheReader` only waited for the seeded summary control to exist, whereas the real seed RPC intentionally leaves it disabled until completion. The second flow had a separate enabled predicate, creating divergent readiness contracts.
+- Fix: both Task 6–9 UI flows now call one `seededSummaryButton(in:)` helper. It waits for `reader-open-summary` existence and then a real `enabled == 1` `XCTNSPredicateExpectation` before returning the control for tapping.
+- Verification: full `xcodebuild test` exit 0, Debug `xcodebuild build` exit 0, and `git diff --check` exit 0. Without injected public local configuration, UI cases still explicitly skip; no live credentials or database reset were used.

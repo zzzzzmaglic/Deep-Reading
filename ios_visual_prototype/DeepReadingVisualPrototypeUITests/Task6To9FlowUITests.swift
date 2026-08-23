@@ -7,8 +7,7 @@ final class Task6To9FlowUITests: XCTestCase {
         let reader = app.textViews["reader-text-view"]
         XCTAssertTrue(reader.waitForExistence(timeout: 12))
 
-        let summaryButton = app.buttons["reader-open-summary"]
-        XCTAssertTrue(summaryButton.waitForExistence(timeout: 12))
+        let summaryButton = seededSummaryButton(in: app)
         summaryButton.tap()
 
         let title = app.staticTexts["标注与笔记"]
@@ -34,10 +33,7 @@ final class Task6To9FlowUITests: XCTestCase {
         let reader = app.textViews["reader-text-view"]
         XCTAssertTrue(reader.waitForExistence(timeout: 12))
 
-        let summaryButton = app.buttons["reader-open-summary"]
-        XCTAssertTrue(summaryButton.waitForExistence(timeout: 12))
-        expectation(for: NSPredicate(format: "enabled == 1"), evaluatedWith: summaryButton)
-        waitForExpectations(timeout: 12)
+        let summaryButton = seededSummaryButton(in: app)
         summaryButton.tap()
         let anchoredEntry = app.descendants(matching: .any)
             .matching(NSPredicate(format: "identifier BEGINSWITH %@", "summary-show-in-article-"))
@@ -83,5 +79,16 @@ final class Task6To9FlowUITests: XCTestCase {
         app.launchArguments.append("-ui-test-seed-highlight")
         app.launch()
         return app
+    }
+
+    private func seededSummaryButton(in app: XCUIApplication) -> XCUIElement {
+        let button = app.buttons["reader-open-summary"]
+        XCTAssertTrue(button.waitForExistence(timeout: 12))
+        let enabled = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "enabled == 1"),
+            object: button
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [enabled], timeout: 12), .completed)
+        return button
     }
 }
