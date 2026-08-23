@@ -68,6 +68,7 @@ struct TagDetailScreen: View {
         .overlay(alignment: .bottom) { selectionToolbar }
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
+        .accessibilityIdentifier("knowledge-tag-detail-\(tagID.uuidString)")
         .task { await coordinator.load(tagID: tagID) }
     }
 

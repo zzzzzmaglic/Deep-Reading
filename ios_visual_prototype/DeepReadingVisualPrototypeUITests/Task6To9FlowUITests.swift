@@ -79,6 +79,7 @@ final class Task6To9FlowUITests: XCTestCase {
         }
         let app = XCUIApplication()
         app.launchEnvironment = ["SUPABASE_URL": url, "SUPABASE_ANON_KEY": anonKey]
+        app.launchArguments.append("-ui-test-open-local-seed-reader")
         app.launchArguments.append("-ui-test-seed-highlight")
         app.launch()
         return app

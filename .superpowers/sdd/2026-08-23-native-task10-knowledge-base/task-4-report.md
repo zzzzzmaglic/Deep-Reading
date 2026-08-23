@@ -29,3 +29,10 @@ Date: 2026-08-23
 - `TagDetailScreen.swift`, `ReadingAssetListRow.swift`, and `ReadingAssetCard.swift`: provide the required stable asset/source/confirmation/dismiss accessibility surface without nested buttons.
 - `SupabaseKnowledgeBaseRepository.swift`: exposes the minimal client-identity seam used to prove runtime repositories share the same `SupabaseClient`.
 - `TagDetailCoordinatorTests.swift`: updates the established semantic confirmation test to the required stable knowledge-base IDs.
+
+## Final review fix round 1
+
+- Root cause: the prior UI seed argument only triggers inside `ReaderScreen`, but the released root correctly opens knowledge home. Consequently the test never mounted the reader and no seed RPC could run; tag IDs also incorrectly embedded a display name.
+- Fix: in DEBUG only, `-ui-test-open-local-seed-reader` initializes the existing knowledge navigation path with a `.knowledge`-origin local seed reader route. The app still launches to the default knowledge home without that argument and in non-DEBUG builds. Both legacy reader UI helpers and the knowledge UI flow add the argument with `-ui-test-seed-highlight`.
+- Fix: `knowledge-tag-{UUID}` now mirrors the stable UUID collection ID convention. The UI flow waits for the first UUID-backed system-tag row after returning to knowledge home, then verifies the tag detail survives the anchored reader round trip.
+- Red/green evidence: new AppRuntime tests first failed to compile because the test-only path and identifier helpers did not exist; after the minimal implementation, focused AppRuntime/knowledge-UI compilation tests, full `xcodebuild test`, Debug `xcodebuild build`, and `git diff --check` all passed on the iPhone 16 iOS 26.5 simulator.

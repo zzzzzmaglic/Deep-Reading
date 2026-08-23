@@ -36,7 +36,7 @@ struct KnowledgeHomeScreen: View {
                         items: coordinator.visibleCollections,
                         isSystem: \.isSystem,
                         title: \.name,
-                        accessibilityIdentifier: { "knowledge-collection-\($0.id.uuidString)" }
+                        accessibilityIdentifier: { KnowledgeAccessibilityIdentifier.collection($0.id) }
                     ) { collection in
                         openCollection(collection)
                     }
@@ -46,7 +46,7 @@ struct KnowledgeHomeScreen: View {
                         items: coordinator.visibleTags,
                         isSystem: \.isSystem,
                         title: \.name,
-                        accessibilityIdentifier: { "knowledge-tag-\($0.name)" }
+                        accessibilityIdentifier: { KnowledgeAccessibilityIdentifier.tag($0.id) }
                     ) { tag in
                         openTag(tag)
                     }

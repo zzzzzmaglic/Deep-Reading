@@ -71,6 +71,21 @@ final class AppRuntimeTests: XCTestCase {
         XCTAssertEqual(AppTab.defaultSelection, .knowledge)
     }
 
+    func testOnlyTheExplicitUITestArgumentSeedsTheKnowledgeReader() {
+        XCTAssertEqual(KnowledgeNavigationInitialPath.destinations(arguments: []), [])
+        XCTAssertEqual(
+            KnowledgeNavigationInitialPath.destinations(arguments: ["-ui-test-open-local-seed-reader"]),
+            [.reader(ReaderRoute(articleID: ReaderRoute.localSeed.articleID, anchorID: nil, origin: .knowledge))]
+        )
+    }
+
+    func testKnowledgeInteractionIdentifiersUseStableUUIDs() {
+        let id = UUID(uuidString: "20000000-0000-0000-0000-000000000001")!
+
+        XCTAssertEqual(KnowledgeAccessibilityIdentifier.collection(id), "knowledge-collection-20000000-0000-0000-0000-000000000001")
+        XCTAssertEqual(KnowledgeAccessibilityIdentifier.tag(id), "knowledge-tag-20000000-0000-0000-0000-000000000001")
+    }
+
     func testReaderUsesAScrollableViewportAndKeepsOffsetWhenChromeHides() async throws {
         let articleID = UUID()
         let blocks = (0 ..< 18).map { index in

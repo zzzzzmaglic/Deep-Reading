@@ -126,6 +126,24 @@ enum KnowledgeNavigationDestination: Hashable {
     case summary(articleID: UUID, origin: ReaderOrigin)
 }
 
+enum KnowledgeNavigationInitialPath {
+    static let uiTestOpenLocalSeedReaderArgument = "-ui-test-open-local-seed-reader"
+
+    static func destinations(arguments: [String]) -> [KnowledgeNavigationDestination] {
+        #if DEBUG
+        guard arguments.contains(uiTestOpenLocalSeedReaderArgument) else { return [] }
+        return [.reader(ReaderRoute(articleID: ReaderRoute.localSeed.articleID, anchorID: nil, origin: .knowledge))]
+        #else
+        return []
+        #endif
+    }
+}
+
+enum KnowledgeAccessibilityIdentifier {
+    static func collection(_ id: UUID) -> String { "knowledge-collection-\(id.uuidString)" }
+    static func tag(_ id: UUID) -> String { "knowledge-tag-\(id.uuidString)" }
+}
+
 struct KnowledgeDependencies: @unchecked Sendable {
     let knowledgeRepository: any KnowledgeBaseRepository
     let readerDependencies: ReaderDependencies
@@ -263,8 +281,13 @@ private struct HomeUnavailableScreen: View {
 
 private struct KnowledgeNavigationContainer: View {
     let dependencies: KnowledgeDependencies
-    @State private var path: [KnowledgeNavigationDestination] = []
+    @State private var path: [KnowledgeNavigationDestination]
     @State private var readerAssetRefreshRevision = 0
+
+    init(dependencies: KnowledgeDependencies) {
+        self.dependencies = dependencies
+        _path = State(initialValue: KnowledgeNavigationInitialPath.destinations(arguments: ProcessInfo.processInfo.arguments))
+    }
 
     var body: some View {
         NavigationStack(path: $path) {
