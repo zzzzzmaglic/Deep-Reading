@@ -15,18 +15,11 @@ create table public.collection_article_exclusions (
 );
 
 alter table public.collection_article_exclusions enable row level security;
-grant select, insert, delete on public.collection_article_exclusions to authenticated;
+grant select on public.collection_article_exclusions to authenticated;
+revoke insert, delete on public.collection_article_exclusions from authenticated;
 
 create policy "owners can read collection article exclusions"
 on public.collection_article_exclusions for select to authenticated
-using (owner_id = auth.uid());
-
-create policy "owners can insert collection article exclusions"
-on public.collection_article_exclusions for insert to authenticated
-with check (owner_id = auth.uid());
-
-create policy "owners can delete collection article exclusions"
-on public.collection_article_exclusions for delete to authenticated
 using (owner_id = auth.uid());
 
 create or replace function public.remove_articles_from_collection(

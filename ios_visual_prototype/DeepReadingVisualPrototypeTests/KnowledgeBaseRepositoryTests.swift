@@ -3,6 +3,8 @@ import XCTest
 
 final class KnowledgeBaseRepositoryTests: XCTestCase {
     private let collectionID = UUID(uuidString: "30000000-0000-0000-0000-000000000001")!
+    private let currentOwnerID = UUID(uuidString: "90000000-0000-0000-0000-000000000001")!
+    private let foreignOwnerID = UUID(uuidString: "90000000-0000-0000-0000-000000000002")!
     private let visibleArticleID = UUID(uuidString: "10000000-0000-0000-0000-000000000001")!
     private let hiddenArticleID = UUID(uuidString: "10000000-0000-0000-0000-000000000002")!
     private let articleID = UUID(uuidString: "10000000-0000-0000-0000-000000000003")!
@@ -11,6 +13,7 @@ final class KnowledgeBaseRepositoryTests: XCTestCase {
 
     func testReadCollectionArticlesExcludesOnlyCurrentOwnersHiddenRows() async throws {
         let remote = FakeSupabaseKnowledgeBaseRemote()
+        remote.currentOwnerID = currentOwnerID
         remote.rowsByTable = collectionArticleRows()
         let repository = SupabaseKnowledgeBaseRepository(remote: remote)
 
@@ -47,7 +50,8 @@ final class KnowledgeBaseRepositoryTests: XCTestCase {
                 ["article_id": hiddenArticleID.uuidString, "collection_id": collectionID.uuidString, "position": 2],
             ],
             "collection_article_exclusions": [
-                ["owner_id": UUID().uuidString, "collection_id": collectionID.uuidString, "article_id": hiddenArticleID.uuidString],
+                ["owner_id": currentOwnerID.uuidString, "collection_id": collectionID.uuidString, "article_id": hiddenArticleID.uuidString],
+                ["owner_id": foreignOwnerID.uuidString, "collection_id": collectionID.uuidString, "article_id": visibleArticleID.uuidString],
             ],
             "articles": [
                 articleRow(id: visibleArticleID, title: "Visible"),

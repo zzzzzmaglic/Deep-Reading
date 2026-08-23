@@ -3,6 +3,7 @@ import Supabase
 
 protocol SupabaseKnowledgeBaseRemote: AnyObject {
     func rpc(name: String, parameters: [String: Any]) async throws
+    func readCurrentOwnerID() async throws -> UUID
     func readRows(from table: String) async throws -> [[String: Any]]
 }
 
@@ -56,6 +57,7 @@ final class SupabaseKnowledgeBaseRepository: KnowledgeBaseRepository, @unchecked
         async let exclusionRows = remote.readRows(from: "collection_article_exclusions")
         async let articleRows = remote.readRows(from: "articles")
         async let assetRows = remote.readRows(from: "reading_assets")
+        async let currentOwnerID = remote.readCurrentOwnerID()
 
         let memberships = try (try await membershipRows).compactMap { row -> (articleID: UUID, position: Int)? in
             guard try requiredUUID(in: row, column: "collection_id", table: "article_collections") == collectionID else { return nil }
@@ -64,8 +66,11 @@ final class SupabaseKnowledgeBaseRepository: KnowledgeBaseRepository, @unchecked
                 try requiredInt(in: row, column: "position", table: "article_collections")
             )
         }.sorted { $0.position < $1.position }
+        let ownerID = try await currentOwnerID
         let hiddenIDs = try Set((try await exclusionRows).compactMap { row -> UUID? in
-            guard try requiredUUID(in: row, column: "collection_id", table: "collection_article_exclusions") == collectionID else { return nil }
+            guard try requiredUUID(in: row, column: "owner_id", table: "collection_article_exclusions") == ownerID,
+                  try requiredUUID(in: row, column: "collection_id", table: "collection_article_exclusions") == collectionID
+            else { return nil }
             return try requiredUUID(in: row, column: "article_id", table: "collection_article_exclusions")
         })
         let articlesByID = try Dictionary(uniqueKeysWithValues: (try await articleRows).map { row in
@@ -214,6 +219,13 @@ private final class LiveSupabaseKnowledgeBaseRemote: SupabaseKnowledgeBaseRemote
         let _: PostgrestResponse<Void> = try await client
             .rpc(name, params: try jsonParameters(from: parameters))
             .execute()
+    }
+
+    func readCurrentOwnerID() async throws -> UUID {
+        if let session = client.auth.currentSession {
+            return session.user.id
+        }
+        return try await client.auth.session.user.id
     }
 
     func readRows(from table: String) async throws -> [[String: Any]] {

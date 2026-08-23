@@ -1,6 +1,6 @@
 begin;
 
-select plan(8);
+select plan(11);
 
 insert into auth.users (id, aud, role, is_anonymous)
 values
@@ -65,6 +65,25 @@ select throws_ok(
   '42501',
   'locked collections cannot be changed'
 );
+select throws_ok(
+  $$insert into public.collection_article_exclusions (owner_id, collection_id, article_id)
+    values (
+      current_setting('test.owner_one')::uuid,
+      '30000000-0000-0000-0000-000000000001'::uuid,
+      '10000000-0000-0000-0000-000000000001'::uuid
+    )$$,
+  '42501',
+  null,
+  'authenticated clients cannot directly hide articles in locked collections'
+);
+select is(
+  (select count(*) from public.collection_article_exclusions
+    where owner_id = current_setting('test.owner_one')::uuid
+      and collection_id = '30000000-0000-0000-0000-000000000001'::uuid
+      and article_id = '10000000-0000-0000-0000-000000000001'::uuid),
+  0::bigint,
+  'locked collection articles cannot become hidden through direct table writes'
+);
 
 select lives_ok(
   $$select public.remove_articles_from_collection(
@@ -78,6 +97,15 @@ select is(
     where owner_id = current_setting('test.owner_one')::uuid),
   1::bigint,
   'only the current owner receives the exclusion'
+);
+select throws_ok(
+  $$delete from public.collection_article_exclusions
+    where owner_id = current_setting('test.owner_one')::uuid
+      and collection_id = current_setting('test.normal_collection_id')::uuid
+      and article_id = current_setting('test.article_id')::uuid$$,
+  '42501',
+  null,
+  'authenticated clients cannot directly delete collection exclusions'
 );
 
 select lives_ok(

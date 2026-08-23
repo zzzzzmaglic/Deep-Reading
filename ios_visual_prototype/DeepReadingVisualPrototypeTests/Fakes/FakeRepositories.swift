@@ -34,6 +34,7 @@ final class FakeSupabaseKnowledgeBaseRemote: SupabaseKnowledgeBaseRemote, @unche
     typealias RPCCall = FakeSupabaseReadingAssetRemote.RPCCall
 
     var lastRPC: RPCCall?
+    var currentOwnerID = UUID()
     var rowsByTable: [String: [[String: Any]]] = [:]
 
     func rpc(name: String, parameters: [String: Any]) async throws {
@@ -42,5 +43,9 @@ final class FakeSupabaseKnowledgeBaseRemote: SupabaseKnowledgeBaseRemote, @unche
 
     func readRows(from table: String) async throws -> [[String: Any]] {
         rowsByTable[table] ?? []
+    }
+
+    func readCurrentOwnerID() async throws -> UUID {
+        currentOwnerID
     }
 }
