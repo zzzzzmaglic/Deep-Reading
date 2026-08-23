@@ -4,6 +4,15 @@
 
 ## 当前交接
 
+### Task 10 原生知识库实施计划 -> 等待执行方式确认
+
+- 日期：2026-08-23
+- 已完成：在用户确认 Task 10 设计规格后，已写入四项内部实施步骤的 TDD 计划：`10.1` 数据库安全契约与原生数据层、`10.2` 首页与集合详情、`10.3` 标签详情与资产卡片复用、`10.4` 原生 Tab 导航与端到端验收。四项均属于同一个产品 Task 10，不产生新的产品任务。
+- 关键结论：Tab Bar 使用原生 iOS 26 `TabView`，不导出整块 Figma 图片；仅当无可用 SF Symbol 时导出单个专有资源。普通集合移除采用 owner-scoped exclusion，普通标签解除关联，锁定系统标签原子批量删除资产。
+- 影响的事实来源：`docs/superpowers/plans/2026-08-23-native-task10-knowledge-base.md`；`docs/superpowers/specs/2026-08-23-native-task10-knowledge-base-design.md`；Figma 12–18；现有 native Task 6–9 代码和测试基线。
+- 待确认项 / 风险：尚未执行任何 Task 10 代码、迁移、数据重置或 Simulator 操作。计划规定每项独立 TDD 验证及提交，且不触碰 `supabase/.branches/`、`supabase/.temp/`。
+- 下一步：用户选择“逐任务子代理执行”或“本会话顺序执行”；选定后从 Task 10.1 开始。
+
 ### Task 10 原生知识库浏览设计 -> 规格审阅
 
 - 日期：2026-08-23
