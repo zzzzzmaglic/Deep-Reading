@@ -7,6 +7,7 @@
 ### Task 10.4 原生知识库根导航 -> 已实现，等待真实本机 UI 验收
 
 - 日期：2026-08-23
+- Final rereview fix round 3：shared scheme `TestAction` 添加了仅含 `$(SUPABASE_URL)` 与 `$(SUPABASE_ANON_KEY)` build-setting 占位符的启用环境变量，供命令行仅在运行时展开并传给 UI test runner；没有写入任何实际值。无配置完整 XCTest 仍通过，且 xcresult 确认三条 UI flow 仍为预期 skip。一次无输出本机 status 注入尝试因 CLI 仅返回 imgproxy/pooler stopped（exit 1）而未能启动 live UI 命令；因此 Scheme 转发尚待环境恢复后实际验证，未尝试第二来源、启动或重置服务。
 - Final rereview fix round 2：两条 Task 6–9 seeded-summary UI 流现在共用同一 `XCTNSPredicateExpectation` helper，均在 `reader-open-summary` 已存在且 `enabled == 1` 后才点击，避免 seed-highlight RPC 异步阶段点击禁用控件。完整 XCTest 与 Debug build 再次 exit 0。
 - Final review fix round 1：DEBUG/UI-test-only `-ui-test-open-local-seed-reader` 现在从知识库根路径 push 本地 seed reader（origin `.knowledge`），因此 `-ui-test-seed-highlight` 确实在 `ReaderScreen` 内执行，返回仍回知识库首页；非 DEBUG 或无该参数的发布行为保持默认知识库首页。标签可访问性 ID 改为稳定 `knowledge-tag-{UUID}`（集合维持同一 UUID 规则），知识库 UI 流先等待 seed 完成、返回首页、再等待 UUID 标签按钮加载。完整 XCTest 与 Debug build 均再次 exit 0；真实 live UI 仍未在本轮本机环境变量下执行。
 - 已完成：`AppRuntime` 以同一个 `SupabaseClient` 注入文章、阅读资产和知识库仓储；ready 根视图改为默认选中“知识库”的原生 `TabView`。知识库拥有唯一 `NavigationStack` path：集合/标签详情 push 阅读器，阅读器返回仅 pop 当前 route；汇总页“在文中显示”先 pop 汇总再替换栈顶 reader route，保留原详情上下文。阅读器与汇总页在该路径上隐藏 Tab Bar。迁移为 `202608230001_task10_knowledge_base.sql`。

@@ -42,3 +42,9 @@ Date: 2026-08-23
 - Root cause: `testSummaryBackControlReturnsToTheReader` only waited for the seeded summary control to exist, whereas the real seed RPC intentionally leaves it disabled until completion. The second flow had a separate enabled predicate, creating divergent readiness contracts.
 - Fix: both Task 6–9 UI flows now call one `seededSummaryButton(in:)` helper. It waits for `reader-open-summary` existence and then a real `enabled == 1` `XCTNSPredicateExpectation` before returning the control for tapping.
 - Verification: full `xcodebuild test` exit 0, Debug `xcodebuild build` exit 0, and `git diff --check` exit 0. Without injected public local configuration, UI cases still explicitly skip; no live credentials or database reset were used.
+
+## Final rereview fix round 3
+
+- Root cause hypothesis: `TestAction` was configured to use scheme launch environment but declared no environment variables, so command-line build settings were not available to the UI test runner.
+- Fix: the shared scheme now declares only two enabled placeholders: `SUPABASE_URL=$(SUPABASE_URL)` and `SUPABASE_ANON_KEY=$(SUPABASE_ANON_KEY)`. No actual value is present in the scheme or repository; a future invocation supplies both as transient Xcode build settings.
+- Verification: no-configuration full XCTest and Debug build both exit 0; xcresult confirms the three intended UI flows skip solely for absent configuration. The one allowed local status read exited 1 while reporting imgproxy/pooler stopped, so it did not yield runtime values and neither live UI command started. This leaves the forwarding hypothesis unconfirmed; no fallback source, service start, key output, or database reset was attempted.
