@@ -38,6 +38,16 @@
                ReferencedContainer = "container:DeepReadingVisualPrototype.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "E60000000000000000000018"
+               BuildableName = "DeepReadingVisualPrototypeUITests.xctest"
+               BlueprintName = "DeepReadingVisualPrototypeUITests"
+               ReferencedContainer = "container:DeepReadingVisualPrototype.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

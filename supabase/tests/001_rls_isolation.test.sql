@@ -111,8 +111,8 @@ select set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222
 select is((select count(*) from public.reading_assets), 1::bigint, 'other owner cannot see another owner assets');
 select is((select count(*) from public.reading_progress), 0::bigint, 'other owner cannot see reading progress');
 select is((select count(*) from public.asset_anchors), 1::bigint, 'other owner cannot see anchors');
-select is((select count(*) from public.tags), 1::bigint, 'other owner cannot see tags');
-select is((select count(*) from public.asset_tags), 0::bigint, 'other owner cannot see asset tags');
+select is((select count(*) from public.tags), 2::bigint, 'other owner sees only its own fixed and fixture tags');
+select is((select count(*) from public.asset_tags), 1::bigint, 'other owner sees only its own fixed asset tag');
 
 reset role;
 select throws_ok(

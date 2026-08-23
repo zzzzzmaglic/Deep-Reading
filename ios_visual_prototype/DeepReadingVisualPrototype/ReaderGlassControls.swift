@@ -2,17 +2,30 @@ import SwiftUI
 
 struct ReaderTopGlassControls: View {
     let onBack: () -> Void
+    let onOpenSummary: () -> Void
+    let isSummaryEnabled: Bool
 
-    init(onBack: @escaping () -> Void = {}) {
+    init(
+        onBack: @escaping () -> Void = {},
+        onOpenSummary: @escaping () -> Void = {},
+        isSummaryEnabled: Bool = true
+    ) {
         self.onBack = onBack
+        self.onOpenSummary = onOpenSummary
+        self.isSummaryEnabled = isSummaryEnabled
     }
 
     var body: some View {
         HStack {
             GlassIconControl(symbol: "chevron.left", label: "返回", action: onBack)
             Spacer()
-            // Summary is introduced in Stage F; retain only the approved visual affordance.
-            GlassIconControl(symbol: "doc.text.magnifyingglass", label: "汇总（即将推出）", action: {}, isEnabled: false)
+            GlassIconControl(
+                symbol: "doc.text.magnifyingglass",
+                label: "标注与笔记",
+                action: onOpenSummary,
+                isEnabled: isSummaryEnabled
+            )
+                .accessibilityIdentifier("reader-open-summary")
         }
         .padding(.horizontal, 20)
         .padding(.top, 52)
@@ -48,6 +61,7 @@ struct ReaderBottomGlassControls: View {
                                 .frame(width: 14, height: 14)
                                 .frame(width: 44, height: 44)
                         }
+                        .contentShape(Rectangle())
                         .buttonStyle(ReaderBounceButtonStyle())
                         .accessibilityLabel("独立笔记")
                     }
@@ -63,12 +77,17 @@ struct ReaderBottomGlassControls: View {
             }
         }
         .padding(.horizontal, 22)
-        .padding(.top, 6)
-        .padding(.bottom, 30)
+        // iPhone 16 Figma frame: controls at y=780, h=44. With an 852pt
+        // canvas this is 28pt from the lower edge; the 8pt top pad retains
+        // the 80pt control region while placing the content exactly there.
+        .padding(.top, 8)
+        .padding(.bottom, 28)
     }
 }
 
-private struct GlassIconControl: View {
+/// Shared by the reader and the current-article summary so their floating
+/// controls always keep the same native glass, sizing and press feedback.
+struct GlassIconControl: View {
     let symbol: String
     let label: String
     let action: () -> Void
@@ -87,6 +106,7 @@ private struct GlassIconControl: View {
                 .font(.system(size: 18, weight: .semibold))
                 .frame(width: 44, height: 44)
         }
+        .contentShape(Circle())
         .buttonStyle(ReaderBounceButtonStyle())
         .disabled(!isEnabled)
         .glassEffect(.regular.interactive(), in: Circle())

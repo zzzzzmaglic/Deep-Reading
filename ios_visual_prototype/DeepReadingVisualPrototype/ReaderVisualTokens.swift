@@ -11,10 +11,10 @@ enum ReaderVisualTokens {
     static let highlight = Color(hex: 0xF2C42E)
     static let horizontalInset: CGFloat = 28
     static let readableWidth: CGFloat = 337
-    static let titleSize: CGFloat = 28
-    static let bodySize: CGFloat = 21
-    static let bodyLineSpacing: CGFloat = 6
-    static let paragraphSpacing: CGFloat = 10
+    static let titleSize: CGFloat = 30
+    static let bodySize: CGFloat = 20
+    static let bodyLineSpacing: CGFloat = 8
+    static let paragraphSpacing: CGFloat = 30
     static let circularControlSize: CGFloat = 44
     static let toolbarWidth: CGFloat = 119
     static let topControlY: CGFloat = 52

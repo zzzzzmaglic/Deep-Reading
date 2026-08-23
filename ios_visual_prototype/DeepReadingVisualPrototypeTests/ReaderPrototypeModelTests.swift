@@ -21,6 +21,13 @@ final class ReaderPrototypeModelTests: XCTestCase {
         XCTAssertFalse(ReaderPrototypeState.initial.focused.controlsAreVisible)
     }
 
+    func testDemoUsesTheApprovedReaderTypographyTokens() {
+        XCTAssertEqual(ReaderVisualTokens.titleSize, 30)
+        XCTAssertEqual(ReaderVisualTokens.bodySize, 20)
+        XCTAssertEqual(ReaderVisualTokens.bodyLineSpacing, 8)
+        XCTAssertEqual(ReaderVisualTokens.paragraphSpacing, 30)
+    }
+
     func testPreviewFrameUsesOnlyKnownFrameNames() {
         XCTAssertEqual(ReaderPrototypeState.preview(frameName: "tagManager").frame, .tagManager)
         XCTAssertEqual(ReaderPrototypeState.preview(frameName: "unknown").frame, .controlsVisible)

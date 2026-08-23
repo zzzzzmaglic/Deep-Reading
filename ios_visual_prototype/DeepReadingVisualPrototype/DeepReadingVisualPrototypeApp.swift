@@ -103,23 +103,42 @@ enum AppRootRenderedElement: Equatable {
     case button(String)
 }
 
+enum AppNavigationDestination: Hashable {
+    case summary(articleID: UUID, origin: ReaderOrigin)
+}
+
+/// The reading flow is intentionally outside Stage F. AppRoot still owns the
+/// semantic handoff so a replacement reader can exit to its original route
+/// without ever rebuilding the summary path.
+struct ReaderOriginDismissal {
+    let dismiss: (ReaderOrigin) -> Void
+
+    static let noOp = ReaderOriginDismissal(dismiss: { _ in })
+}
+
 struct AppRootView: View {
     private let configurationLoader: () throws -> SupabaseRuntimeConfiguration
     private let runtimeBuilder: (SupabaseRuntimeConfiguration) -> any AppRuntimeBootstrapping
     private let renderObserver: ((AppRootRenderedElement) -> Void)?
+    private let originDismissal: ReaderOriginDismissal
     @State private var screen = AppRootScreen.loading
     @State private var runtime: (any AppRuntimeBootstrapping)?
+    @State private var readerRoute = ReaderRoute.localSeed
+    @State private var navigationPath: [AppNavigationDestination] = []
+    @State private var readerAssetRefreshRevision = 0
 
     init(
         configurationLoader: @escaping () throws -> SupabaseRuntimeConfiguration = {
             try SupabaseRuntimeConfiguration.load()
         },
         runtimeBuilder: @escaping (SupabaseRuntimeConfiguration) -> any AppRuntimeBootstrapping = { AppRuntime(configuration: $0) },
-        renderObserver: ((AppRootRenderedElement) -> Void)? = nil
+        renderObserver: ((AppRootRenderedElement) -> Void)? = nil,
+        originDismissal: ReaderOriginDismissal = .noOp
     ) {
         self.configurationLoader = configurationLoader
         self.runtimeBuilder = runtimeBuilder
         self.renderObserver = renderObserver
+        self.originDismissal = originDismissal
         _screen = State(initialValue: Self.loadScreen(using: configurationLoader))
     }
 
@@ -164,8 +183,34 @@ struct AppRootView: View {
                     .task { await bootstrapRuntime() }
             case .ready:
                 if let dependencies = runtime?.readerDependencies {
-                    ReaderScreen(route: .localSeed, dependencies: dependencies)
-                        .onAppear { renderObserver?(.text("Reader runtime ready")) }
+                    NavigationStack(path: $navigationPath) {
+                        ReaderScreen(
+                            route: readerRoute,
+                            dependencies: dependencies,
+                            onOpenSummary: { route in
+                                navigationPath.append(.summary(articleID: route.articleID, origin: route.origin))
+                            },
+                            onBack: originDismissal.dismiss,
+                            assetRefreshRevision: readerAssetRefreshRevision
+                        )
+                        .navigationDestination(for: AppNavigationDestination.self) { destination in
+                            switch destination {
+                            case let .summary(articleID, origin):
+                                ArticleAssetSummaryScreen(
+                                    articleID: articleID,
+                                    origin: origin,
+                                    dependencies: dependencies,
+                                    dismissToReader: { navigationPath.removeAll() },
+                                    showInArticle: { anchoredRoute in
+                                        navigationPath.removeAll()
+                                        readerRoute = anchoredRoute
+                                    },
+                                    refreshReaderAssets: { readerAssetRefreshRevision += 1 }
+                                )
+                            }
+                        }
+                    }
+                    .onAppear { renderObserver?(.text("Reader runtime ready")) }
                 } else {
                     Text("Reader runtime ready")
                         .accessibilityIdentifier("app-root-runtime-ready")

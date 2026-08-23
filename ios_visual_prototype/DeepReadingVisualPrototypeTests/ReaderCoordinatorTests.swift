@@ -21,10 +21,19 @@ final class ReaderCoordinatorTests: XCTestCase {
             progressDebounce: .milliseconds(350)
         )
         try await coordinator.load(route: ReaderRoute(articleID: articleID, anchorID: nil, origin: .feed))
+        let layout = ReaderTextLayout(article: article, image: nil)
+        let firstBlockRange = try XCTUnwrap(layout.range(forBlockID: firstBlockID))
+        let secondBlockRange = try XCTUnwrap(layout.range(forBlockID: secondBlockID))
 
-        coordinator.queueProgress(visibleUTF16Location: 2)
-        coordinator.queueProgress(visibleUTF16Location: 15)
-        try await Task.sleep(for: .milliseconds(430))
+        coordinator.queueProgress(visibleUTF16Location: firstBlockRange.location + 2)
+        coordinator.queueProgress(visibleUTF16Location: secondBlockRange.location + 4)
+        try await Task.sleep(for: .milliseconds(340))
+        let earlyProgressWrites = await assets.progressWritesSnapshot()
+        XCTAssertTrue(earlyProgressWrites.isEmpty)
+        for _ in 0 ..< 50 {
+            if !(await assets.progressWritesSnapshot()).isEmpty { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
 
         let progressWrites = await assets.progressWrites
         XCTAssertEqual(progressWrites, [ReaderPosition(blockID: secondBlockID, utf16Offset: 4)])
@@ -50,15 +59,51 @@ final class ReaderCoordinatorTests: XCTestCase {
         try await coordinator.load(route: ReaderRoute(articleID: articleID, anchorID: anchorID, origin: .knowledge))
 
         XCTAssertEqual(coordinator.initialPosition, ReaderPosition(blockID: secondBlockID, utf16Offset: 1))
+        XCTAssertEqual(coordinator.scrollRequestRevision, 1)
+
+        coordinator.consumeInitialPosition()
+        XCTAssertEqual(
+            coordinator.scrollRequestRevision,
+            1,
+            "Consuming a one-shot position must not erase the viewport identity that applies the route anchor."
+        )
     }
 
-    func testDownScrollHidesChromeAfterDelayAndTapShowsIt() async throws {
-        let coordinator = ReaderCoordinator(dependencies: ReaderDependencies(articleRepository: ReaderTestArticleRepository(article: .empty), readingAssetRepository: ReaderTestAssetRepository()), chromeHideDelay: .milliseconds(40))
+    func testInitialPositionIsConsumedAfterTextKitAppliesIt() async throws {
+        let articleID = UUID()
+        let blockID = UUID()
+        let article = Article(
+            id: articleID, title: "标题", sourceName: "来源", contentChecksum: "checksum",
+            blocks: [ArticleBlock(id: blockID, articleID: articleID, position: 0, content: "正文", kind: .paragraph)]
+        )
+        let coordinator = ReaderCoordinator(dependencies: ReaderDependencies(
+            articleRepository: ReaderTestArticleRepository(
+                article: article,
+                progress: ReaderPosition(blockID: blockID, utf16Offset: 1)
+            ),
+            readingAssetRepository: ReaderTestAssetRepository()
+        ))
+
+        try await coordinator.load(route: ReaderRoute(articleID: articleID, anchorID: nil, origin: .feed))
+        XCTAssertNotNil(coordinator.initialPosition)
+
+        coordinator.consumeInitialPosition()
+
+        XCTAssertNil(coordinator.initialPosition)
+    }
+
+    func testScrollAndTapToggleChromeImmediately() async throws {
+        let coordinator = ReaderCoordinator(dependencies: ReaderDependencies(articleRepository: ReaderTestArticleRepository(article: .empty), readingAssetRepository: ReaderTestAssetRepository()))
         coordinator.handleScroll(direction: .down)
-        try await Task.sleep(for: .milliseconds(80))
         XCTAssertFalse(coordinator.chromeIsVisible)
 
         coordinator.handleBodyTap()
+        XCTAssertTrue(coordinator.chromeIsVisible)
+
+        coordinator.handleBodyTap()
+        XCTAssertFalse(coordinator.chromeIsVisible)
+
+        coordinator.handleScroll(direction: .up)
         XCTAssertTrue(coordinator.chromeIsVisible)
     }
 
@@ -198,15 +243,59 @@ final class ReaderCoordinatorTests: XCTestCase {
         let assets = ReaderTestAssetRepository(firstProgressWriteFailsAfter: .milliseconds(220))
         let coordinator = ReaderCoordinator(dependencies: ReaderDependencies(articleRepository: ReaderTestArticleRepository(article: article), readingAssetRepository: assets))
         try await coordinator.load(route: ReaderRoute(articleID: articleID, anchorID: nil, origin: .feed))
+        let layout = ReaderTextLayout(article: article, image: nil)
+        let blockRange = try XCTUnwrap(layout.range(forBlockID: blockID))
 
-        coordinator.queueProgress(visibleUTF16Location: 4)
-        try await Task.sleep(for: .milliseconds(370))
-        coordinator.queueProgress(visibleUTF16Location: 6)
+        coordinator.queueProgress(visibleUTF16Location: blockRange.location + 1)
+        await assets.waitForFirstProgressWrite()
+        coordinator.queueProgress(visibleUTF16Location: blockRange.location + 2)
         try await Task.sleep(for: .milliseconds(620))
 
         XCTAssertNil(coordinator.progressFailure)
         let progressWrites = await assets.progressWrites
         XCTAssertEqual(progressWrites, [ReaderPosition(blockID: blockID, utf16Offset: 2)])
+    }
+
+    func testOldAssetCardSuccessCannotCloseNewerCardAfterRouteChange() async throws {
+        let oldArticleID = UUID()
+        let newArticleID = UUID()
+        let oldBlockID = UUID()
+        let newBlockID = UUID()
+        let oldArticle = Article(
+            id: oldArticleID,
+            title: "标题",
+            sourceName: "来源",
+            contentChecksum: "checksum",
+            blocks: [ArticleBlock(id: oldBlockID, articleID: oldArticleID, position: 0, content: "旧正文", kind: .paragraph)]
+        )
+        let newArticle = Article(
+            id: newArticleID,
+            title: "新标题",
+            sourceName: "来源",
+            contentChecksum: "new-checksum",
+            blocks: [ArticleBlock(id: newBlockID, articleID: newArticleID, position: 0, content: "新正文", kind: .paragraph)]
+        )
+        let coordinator = ReaderCoordinator(dependencies: ReaderDependencies(
+            articleRepository: ReaderRoutingArticleRepository(
+                articles: [oldArticleID: oldArticle, newArticleID: newArticle],
+                progress: [:],
+                delayedID: UUID()
+            ),
+            readingAssetRepository: ReaderTestAssetRepository()
+        ))
+        try await coordinator.load(route: ReaderRoute(articleID: oldArticleID, anchorID: nil, origin: .feed))
+
+        XCTAssertNotNil(coordinator.beginStandaloneNote())
+        let oldToken = try XCTUnwrap(coordinator.assetCardToken)
+        try await coordinator.load(route: ReaderRoute(articleID: newArticleID, anchorID: nil, origin: .feed))
+        XCTAssertNotNil(coordinator.beginStandaloneNote())
+        let newToken = try XCTUnwrap(coordinator.assetCardToken)
+        XCTAssertNotEqual(oldToken, newToken)
+
+        coordinator.completeAssetCardSave(token: oldToken, restoring: ReaderChromeState(isVisible: true))
+
+        XCTAssertEqual(coordinator.assetCardToken, newToken)
+        XCTAssertNotNil(coordinator.presentedAssetDraft)
     }
 }
 
@@ -226,6 +315,7 @@ private actor ReaderTestAssetRepository: ReadingAssetRepository {
     let firstProgressWriteFailsAfter: Duration?
     private(set) var progressWrites: [ReaderPosition] = []
     private var progressAttempts = 0
+    private var firstProgressWriteWaiters: [CheckedContinuation<Void, Never>] = []
 
     init(assets: [ReadingAsset] = [], readError: Bool = false, readDelay: Duration? = nil, firstProgressWriteFailsAfter: Duration? = nil) {
         self.assets = assets
@@ -245,12 +335,25 @@ private actor ReaderTestAssetRepository: ReadingAssetRepository {
     func deleteReadingAsset(id: UUID) async throws {}
     func upsertReadingProgress(articleID: UUID, position: ReaderPosition) async throws {
         progressAttempts += 1
+        if progressAttempts == 1 {
+            let waiters = firstProgressWriteWaiters
+            firstProgressWriteWaiters.removeAll()
+            waiters.forEach { $0.resume() }
+        }
         if progressAttempts == 1, let firstProgressWriteFailsAfter {
             try? await Task.sleep(for: firstProgressWriteFailsAfter)
             throw ReaderTestError.writeFailed
         }
         progressWrites.append(position)
     }
+
+    func waitForFirstProgressWrite() async {
+        guard progressAttempts == 0 else { return }
+        await withCheckedContinuation { continuation in
+            firstProgressWriteWaiters.append(continuation)
+        }
+    }
+    func progressWritesSnapshot() -> [ReaderPosition] { progressWrites }
     func readTags() async throws -> [Tag] { [] }
     func createTag(name: String) async throws -> Tag { fatalError("Not used") }
     func saveReadingAsset(id: UUID, noteContent: String?, tagIDs: [UUID]) async throws -> ReadingAsset { fatalError("Not used") }

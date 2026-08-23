@@ -19,10 +19,10 @@ struct ReaderPrototypeView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(state.article.title)
-                        .font(.system(size: ReaderVisualTokens.titleSize, weight: .medium))
+                        .font(.system(size: ReaderVisualTokens.titleSize, weight: .bold))
                         .foregroundStyle(ReaderVisualTokens.primaryText)
-                        .padding(.top, 116)
-                        .padding(.bottom, 28)
+                        .padding(.top, 164)
+                        .padding(.bottom, ReaderVisualTokens.paragraphSpacing)
 
                     ForEach(state.article.blocks) { block in
                         blockView(block)
@@ -91,7 +91,7 @@ struct ReaderPrototypeView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(maxWidth: .infinity)
-                .padding(.bottom, 28)
+                .padding(.bottom, ReaderVisualTokens.paragraphSpacing)
         }
     }
 
