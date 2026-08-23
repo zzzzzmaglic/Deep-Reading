@@ -291,11 +291,7 @@ private struct KnowledgeNavigationContainer: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            KnowledgeHomeScreen(
-                repository: dependencies.knowledgeRepository,
-                openCollection: { path.append(.collection($0.id)) },
-                openTag: { path.append(.tag($0.id)) }
-            )
+            KnowledgeHomeScreen(repository: dependencies.knowledgeRepository)
             .accessibilityIdentifier("knowledge-home")
             .navigationDestination(for: KnowledgeNavigationDestination.self) { destination in
                 switch destination {

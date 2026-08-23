@@ -69,15 +69,14 @@ final class Task6To9FlowUITests: XCTestCase {
     }
 
     private func launchSeededReader() throws -> XCUIApplication {
-        let environment = ProcessInfo.processInfo.environment
-        guard let url = environment["SUPABASE_URL"], let anonKey = environment["SUPABASE_ANON_KEY"] else {
-            throw XCTSkip("Local Supabase configuration was not supplied to the UI test runner.")
-        }
         let app = XCUIApplication()
-        app.launchEnvironment = ["SUPABASE_URL": url, "SUPABASE_ANON_KEY": anonKey]
+        app.terminate()
         app.launchArguments.append("-ui-test-open-local-seed-reader")
         app.launchArguments.append("-ui-test-seed-highlight")
         app.launch()
+        if app.otherElements["app-root-configuration-error"].waitForExistence(timeout: 3) {
+            throw XCTSkip("Local Supabase configuration was not supplied to the built app.")
+        }
         return app
     }
 
@@ -89,6 +88,10 @@ final class Task6To9FlowUITests: XCTestCase {
             object: button
         )
         XCTAssertEqual(XCTWaiter.wait(for: [enabled], timeout: 12), .completed)
+        XCTAssertFalse(
+            app.buttons["reader-highlight-retry"].exists,
+            "The UI-test seed highlight RPC must succeed before opening the summary."
+        )
         return button
     }
 }

@@ -68,7 +68,6 @@ struct TagDetailScreen: View {
         .overlay(alignment: .bottom) { selectionToolbar }
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
-        .accessibilityIdentifier("knowledge-tag-detail-\(tagID.uuidString)")
         .task { await coordinator.load(tagID: tagID) }
     }
 
@@ -126,6 +125,7 @@ struct TagDetailScreen: View {
             Text(coordinator.tag?.name ?? "标签")
                 .font(.system(size: 17, weight: .bold))
                 .foregroundStyle(KnowledgeVisualTokens.primaryText)
+                .accessibilityIdentifier("knowledge-tag-detail-\(tagID.uuidString)")
                 .padding(.top, 61)
             HStack {
                 GlassIconControl(symbol: "chevron.left", label: "返回", action: dismiss)

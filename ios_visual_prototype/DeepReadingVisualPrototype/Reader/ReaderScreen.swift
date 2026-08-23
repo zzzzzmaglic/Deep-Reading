@@ -65,6 +65,8 @@ struct ReaderScreen: View {
             }
         }
         .statusBarHidden(!coordinator.chromeIsVisible)
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
         .preferredColorScheme(.light)
         .task(id: assetRefreshRevision) {
             guard assetRefreshRevision > 0 else { return }

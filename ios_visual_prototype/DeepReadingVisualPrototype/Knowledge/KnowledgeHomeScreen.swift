@@ -2,18 +2,10 @@ import SwiftUI
 
 struct KnowledgeHomeScreen: View {
     @StateObject private var coordinator: KnowledgeHomeCoordinator
-    let openCollection: (KnowledgeCollection) -> Void
-    let openTag: (Tag) -> Void
     @State private var compactTitle = false
 
-    init(
-        repository: any KnowledgeBaseRepository,
-        openCollection: @escaping (KnowledgeCollection) -> Void = { _ in },
-        openTag: @escaping (Tag) -> Void = { _ in }
-    ) {
+    init(repository: any KnowledgeBaseRepository) {
         _coordinator = StateObject(wrappedValue: KnowledgeHomeCoordinator(repository: repository))
-        self.openCollection = openCollection
-        self.openTag = openTag
     }
 
     var body: some View {
@@ -36,20 +28,18 @@ struct KnowledgeHomeScreen: View {
                         items: coordinator.visibleCollections,
                         isSystem: \.isSystem,
                         title: \.name,
-                        accessibilityIdentifier: { KnowledgeAccessibilityIdentifier.collection($0.id) }
-                    ) { collection in
-                        openCollection(collection)
-                    }
+                        accessibilityIdentifier: { KnowledgeAccessibilityIdentifier.collection($0.id) },
+                        destination: { .collection($0.id) }
+                    )
                     groupHeader(header: .tags, title: "标签", expanded: coordinator.tagsExpanded, toggle: coordinator.toggleTags)
                         .padding(.top, 30)
                     KnowledgeGroupList(
                         items: coordinator.visibleTags,
                         isSystem: \.isSystem,
                         title: \.name,
-                        accessibilityIdentifier: { KnowledgeAccessibilityIdentifier.tag($0.id) }
-                    ) { tag in
-                        openTag(tag)
-                    }
+                        accessibilityIdentifier: { KnowledgeAccessibilityIdentifier.tag($0.id) },
+                        destination: { .tag($0.id) }
+                    )
                     Spacer(minLength: 128)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -114,12 +104,12 @@ private struct KnowledgeGroupList<Item: Identifiable>: View {
     let isSystem: KeyPath<Item, Bool>
     let title: KeyPath<Item, String>
     let accessibilityIdentifier: (Item) -> String
-    let select: (Item) -> Void
+    let destination: (Item) -> KnowledgeNavigationDestination
 
     var body: some View {
         VStack(spacing: 0) {
             ForEach(items) { item in
-                Button { select(item) } label: {
+                NavigationLink(value: destination(item)) {
                     HStack(spacing: 10) {
                         Text(item[keyPath: title]).font(.system(size: 16, weight: item[keyPath: isSystem] ? .medium : .regular))
                         Spacer()
@@ -129,9 +119,11 @@ private struct KnowledgeGroupList<Item: Identifiable>: View {
                     }
                     .padding(.horizontal, 16)
                     .frame(height: KnowledgeVisualTokens.rowHeight)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier(accessibilityIdentifier(item))
+                .accessibilityValue(item[keyPath: isSystem] ? "system" : "user")
                 if item.id != items.last?.id { Divider().padding(.leading, 16).overlay(KnowledgeVisualTokens.divider) }
             }
         }

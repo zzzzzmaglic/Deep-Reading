@@ -404,21 +404,57 @@ final class ReaderCoordinator: ObservableObject {
         uiTestHighlightSeedIsReady = false
         let selection = NSRange(location: sourceRange.location, length: min(sourceRange.length, 12))
         await refreshAssets()
-        guard let anchor = try? layout.anchor(for: selection) else { return }
+        guard assetFailure == nil, let anchor = try? layout.anchor(for: selection) else {
+            uiTestHighlightSeedIsReady = true
+            return
+        }
         if assets.contains(where: {
                   $0.anchor?.startBlockID == anchor.startBlockID
                       && $0.anchor?.startUTF16Offset == anchor.startUTF16Offset
               }) {
+            await ensureUITestSeedAssetIsInSystemTag(matching: anchor)
             uiTestHighlightSeedIsReady = true
             return
         }
         do {
             try await createHighlight(articleID: article.id, anchor: anchor, generation: loadGeneration)
+            await ensureUITestSeedAssetIsInSystemTag(matching: anchor)
             uiTestHighlightSeedIsReady = true
         } catch {
             // `createHighlight` publishes its normal retryable failure state.
             uiTestHighlightSeedIsReady = true
         }
+    }
+
+    private func ensureUITestSeedAssetIsInSystemTag(matching anchor: TextAnchor) async {
+        guard let asset = assets.first(where: {
+            $0.anchor?.startBlockID == anchor.startBlockID
+                && $0.anchor?.startUTF16Offset == anchor.startUTF16Offset
+        }) else { return }
+
+        let systemTag: Tag
+        do {
+            guard let loadedSystemTag = try await dependencies.readingAssetRepository.readTags().first(where: \.isSystem) else {
+                return
+            }
+            systemTag = loadedSystemTag
+        } catch {
+            return
+        }
+
+        guard !asset.tags.contains(where: { $0.id == systemTag.id }) else {
+            return
+        }
+
+        var tagIDs = Set(asset.tags.map(\.id))
+        tagIDs.insert(systemTag.id)
+        do {
+            try await dependencies.readingAssetRepository.setAssetTags(assetID: asset.id, tagIDs: Array(tagIDs))
+        } catch {
+            return
+        }
+
+        await refreshAssets()
     }
     #endif
 

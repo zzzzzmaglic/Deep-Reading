@@ -11,15 +11,24 @@ final class KnowledgeBaseFlowUITests: XCTestCase {
         XCTAssertTrue(summaryButton.waitForExistence(timeout: 12))
         expectation(for: NSPredicate(format: "enabled == 1"), evaluatedWith: summaryButton)
         waitForExpectations(timeout: 12)
-        app.buttons["返回"].tap()
-        XCTAssertTrue(app.otherElements["knowledge-home"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["reader-highlight-retry"].exists)
+        app.buttons["reader-back"].tap()
+        expectation(for: NSPredicate(format: "isHittable == false"), evaluatedWith: reader)
+        waitForExpectations(timeout: 8)
 
+        // System tags sort before user tags. The UUID-based identifier keeps
+        // this independent of display names while the value verifies the
+        // required system route semantics.
         let systemTag = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH %@", "knowledge-tag-")
         ).firstMatch
         XCTAssertTrue(systemTag.waitForExistence(timeout: 8))
+        XCTAssertEqual(systemTag.value as? String, "system")
+        XCTAssertTrue(systemTag.isHittable, "The loaded system tag must be tappable before navigation is asserted.")
         let tagID = systemTag.identifier.replacingOccurrences(of: "knowledge-tag-", with: "")
         systemTag.tap()
+        let tagDetail = app.staticTexts["knowledge-tag-detail-\(tagID)"]
+        XCTAssertTrue(tagDetail.waitForExistence(timeout: 8))
         let asset = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH %@", "knowledge-asset-")
         ).firstMatch
@@ -34,21 +43,18 @@ final class KnowledgeBaseFlowUITests: XCTestCase {
         XCTAssertTrue(source.waitForExistence(timeout: 3))
         source.tap()
         XCTAssertTrue(reader.waitForExistence(timeout: 4))
-        app.buttons["返回"].tap()
-        XCTAssertTrue(app.otherElements["knowledge-tag-detail-\(tagID)"].waitForExistence(timeout: 3))
+        app.buttons["reader-back"].tap()
+        XCTAssertTrue(tagDetail.waitForExistence(timeout: 3))
     }
 
     private func launchWithLocalSupabaseAndSeededHighlight() throws {
-        let environment = ProcessInfo.processInfo.environment
-        guard let url = environment["SUPABASE_URL"], let anonKey = environment["SUPABASE_ANON_KEY"] else {
-            throw XCTSkip("Local Supabase configuration was not supplied to the UI test runner.")
-        }
         app = XCUIApplication()
-        // Values are forwarded only at runtime and are never persisted in the
-        // UI test source or its launch arguments.
-        app.launchEnvironment = ["SUPABASE_URL": url, "SUPABASE_ANON_KEY": anonKey]
+        app.terminate()
         app.launchArguments.append("-ui-test-open-local-seed-reader")
         app.launchArguments.append("-ui-test-seed-highlight")
         app.launch()
+        if app.otherElements["app-root-configuration-error"].waitForExistence(timeout: 3) {
+            throw XCTSkip("Local Supabase configuration was not supplied to the built app.")
+        }
     }
 }

@@ -18,6 +18,7 @@ struct ReaderTopGlassControls: View {
     var body: some View {
         HStack {
             GlassIconControl(symbol: "chevron.left", label: "返回", action: onBack)
+                .accessibilityIdentifier("reader-back")
             Spacer()
             GlassIconControl(
                 symbol: "doc.text.magnifyingglass",

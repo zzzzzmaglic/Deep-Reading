@@ -4,16 +4,18 @@
 
 ## 当前交接
 
-### Task 10.4 原生知识库根导航 -> 已实现，等待真实本机 UI 验收
+### Task 10.4 原生知识库根导航 -> 已完成自动化本机验收，等待手工视觉验收
 
-- 日期：2026-08-23
+- 日期：2026-08-24
+- Final live-UI fix：真实本机流程确认系统标签、已 seed 的阅读资产、标签详情和锚点阅读器均来自现有数据链路。首页组行改为同一 `NavigationStack(path:)` 的 `NavigationLink(value:)`，并补 `contentShape(Rectangle())`，修复视觉行 47 pt 但原 AX 点击区域仅 19 pt、导致标签点击不进入详情的问题。标签详情 ID 移至标题 `StaticText`，资产卡片 ID 移至遮罩层，避免根 `ZStack` 合并/覆盖子按钮 ID；不引入嵌套按钮。所有临时 presence/status 诊断均已删除，保留稳定 ID。
+- 实际 live 验证：在 `Deep Reading · iPhone 16`（iOS 26.5、ARM64、默认 DerivedData，`ARCHS=arm64 ONLY_ACTIVE_ARCH=YES`）通过三条真实流程：知识库系统标签 → 资产卡片 → 来源锚点阅读器 → 返回同一标签详情；以及两条 Task 6–9 seed-highlight → 汇总 → 返回阅读器流程。测试配置仅在运行时传入，未记录配置值或重置数据。
 - Final rereview fix round 3：shared scheme `TestAction` 添加了仅含 `$(SUPABASE_URL)` 与 `$(SUPABASE_ANON_KEY)` build-setting 占位符的启用环境变量，供命令行仅在运行时展开并传给 UI test runner；没有写入任何实际值。无配置完整 XCTest 仍通过，且 xcresult 确认三条 UI flow 仍为预期 skip。一次无输出本机 status 注入尝试因 CLI 仅返回 imgproxy/pooler stopped（exit 1）而未能启动 live UI 命令；因此 Scheme 转发尚待环境恢复后实际验证，未尝试第二来源、启动或重置服务。
 - Final rereview fix round 2：两条 Task 6–9 seeded-summary UI 流现在共用同一 `XCTNSPredicateExpectation` helper，均在 `reader-open-summary` 已存在且 `enabled == 1` 后才点击，避免 seed-highlight RPC 异步阶段点击禁用控件。完整 XCTest 与 Debug build 再次 exit 0。
 - Final review fix round 1：DEBUG/UI-test-only `-ui-test-open-local-seed-reader` 现在从知识库根路径 push 本地 seed reader（origin `.knowledge`），因此 `-ui-test-seed-highlight` 确实在 `ReaderScreen` 内执行，返回仍回知识库首页；非 DEBUG 或无该参数的发布行为保持默认知识库首页。标签可访问性 ID 改为稳定 `knowledge-tag-{UUID}`（集合维持同一 UUID 规则），知识库 UI 流先等待 seed 完成、返回首页、再等待 UUID 标签按钮加载。完整 XCTest 与 Debug build 均再次 exit 0；真实 live UI 仍未在本轮本机环境变量下执行。
 - 已完成：`AppRuntime` 以同一个 `SupabaseClient` 注入文章、阅读资产和知识库仓储；ready 根视图改为默认选中“知识库”的原生 `TabView`。知识库拥有唯一 `NavigationStack` path：集合/标签详情 push 阅读器，阅读器返回仅 pop 当前 route；汇总页“在文中显示”先 pop 汇总再替换栈顶 reader route，保留原详情上下文。阅读器与汇总页在该路径上隐藏 Tab Bar。迁移为 `202608230001_task10_knowledge_base.sql`。
-- 验证：iPhone 16（实际 Simulator 名称 `Deep Reading · iPhone 16`、iOS 26.5、ARM64）完整 `xcodebuild test` exit 0、Debug `xcodebuild build` exit 0；无公开本机配置时三条 UI 流程（Task 6–9 两条、新增知识库一条）以显式 skip 退出，全部 XCTest 其余用例通过；不写入凭据。`git diff --check` 当前通过。
-- 手工验收：未执行。真实 live UI flow 仍需要以仅运行时注入的 `SUPABASE_URL` / `SUPABASE_ANON_KEY` 运行；本轮不执行或申请 `supabase db reset`。`supabase status -o env` 提示 imgproxy/pooler 停止；这与此前核心匿名读取可用时的非核心状态一致，作为 live UI 验证 caveat 记录，不视为代码缺陷。
-- 风险 / 下一步：需要在现有验收数据保持不变的情况下执行真实标签资产卡片→来源锚点阅读器→返回标签详情流程，并完成 Figma 12–18 手工视觉对照。现有 `UIScreen.main` 弃用警告未扩大范围处理；`supabase/.branches/` 与 `supabase/.temp/` 不纳入提交。
+- 验证：完整 `xcodebuild test` exit 0、Debug `xcodebuild build` exit 0、`git diff --check` exit 0。无配置时三条 UI 流仍会以 app 配置错误的显式 skip 结束；有临时本机配置时上述三条均实际执行并通过。迁移仍为 `202608230001_task10_knowledge_base.sql`；本轮没有数据库迁移或 reset。
+- 手工验收：功能路径的自动化本机验收已完成；Figma 12–18 的默认 Tab、116 pt 渐进虚化、卡片几何和原生 glass 控件仍待人工视觉/触感对照。
+- 风险 / 下一步：`supabase status` 的 imgproxy/pooler stopped 仍只是非核心服务状态提示，核心匿名读取及 live UI 已验证，不作为代码问题。保留既有 `UIScreen.main` 弃用和 asset catalog 未分配子项警告，不扩大范围处理；`supabase/.branches/` 与 `supabase/.temp/` 不纳入提交。
 
 ### Task 10 原生知识库实施计划 -> 等待执行方式确认
 

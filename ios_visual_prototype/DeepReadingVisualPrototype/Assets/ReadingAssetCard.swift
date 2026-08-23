@@ -150,6 +150,7 @@ struct ReadingAssetCard: View {
         ZStack {
             Color.black.opacity(0.16)
                 .ignoresSafeArea()
+                .accessibilityIdentifier("reading-asset-card")
                 .onTapGesture {
                     guard !controller.isMutationInFlight else { return }
                     requestClose()
@@ -187,7 +188,6 @@ struct ReadingAssetCard: View {
             }
 
         }
-        .accessibilityIdentifier("reading-asset-card")
         .task { await controller.loadAvailableTags(ensuring: debugDemoTagNames) }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
             guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
