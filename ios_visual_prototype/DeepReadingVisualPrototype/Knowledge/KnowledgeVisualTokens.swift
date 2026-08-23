@@ -18,3 +18,38 @@ enum KnowledgeVisualTokens {
     static let coverWidth: CGFloat = 74
     static let coverHeight: CGFloat = 78
 }
+
+enum KnowledgeHomeHeader: String {
+    case collections
+    case tags
+}
+
+enum KnowledgeHomeHeaderPolicy {
+    static let minimumHitAreaHeight: CGFloat = 44
+
+    static func toggleTarget(for header: KnowledgeHomeHeader) -> KnowledgeHomeHeader {
+        header
+    }
+}
+
+enum KnowledgeCoverAssetName {
+    static let seedArticleAssetNames = ["KnowledgeCover1", "KnowledgeCover2", "KnowledgeCover3"]
+    private static let exportedAssetNames = Set((1...6).map { "KnowledgeCover\($0)" })
+
+    static func isExported(_ name: String) -> Bool {
+        exportedAssetNames.contains(name)
+    }
+}
+
+enum CollectionDetailChromeLayer: Equatable {
+    case progressiveEdge
+    case chrome
+}
+
+enum CollectionDetailScreenPolicy {
+    static let topLayerOrder: [CollectionDetailChromeLayer] = [.progressiveEdge, .chrome]
+
+    static func attachesSelectionGesture(isLockedCollection: Bool) -> Bool {
+        !isLockedCollection
+    }
+}

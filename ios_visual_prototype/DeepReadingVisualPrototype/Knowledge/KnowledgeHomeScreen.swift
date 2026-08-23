@@ -24,12 +24,12 @@ struct KnowledgeHomeScreen: View {
                         .foregroundStyle(KnowledgeVisualTokens.primaryText)
                         .padding(.top, 58)
                         .padding(.leading, 24)
-                    groupHeader(title: "推文合集", expanded: coordinator.collectionsExpanded, toggle: coordinator.toggleCollections)
+                    groupHeader(header: .collections, title: "推文合集", expanded: coordinator.collectionsExpanded, toggle: coordinator.toggleCollections)
                         .padding(.top, 20)
                     KnowledgeGroupList(items: coordinator.visibleCollections, isSystem: \.isSystem, title: \.name) { collection in
                         openCollection(collection)
                     }
-                    groupHeader(title: "标签", expanded: coordinator.tagsExpanded, toggle: coordinator.toggleTags)
+                    groupHeader(header: .tags, title: "标签", expanded: coordinator.tagsExpanded, toggle: coordinator.toggleTags)
                         .padding(.top, 30)
                     KnowledgeGroupList(items: coordinator.visibleTags, isSystem: \.isSystem, title: \.name) { _ in }
                     Spacer(minLength: 128)
@@ -52,19 +52,22 @@ struct KnowledgeHomeScreen: View {
         .overlay(alignment: .bottom) { knowledgeBottomEdge }
     }
 
-    private func groupHeader(title: String, expanded: Bool, toggle: @escaping () -> Void) -> some View {
-        HStack(spacing: 4) {
-            Text(title)
-                .font(.system(size: KnowledgeVisualTokens.sectionTitleSize, weight: .bold))
-            Button(action: toggle) {
+    private func groupHeader(header: KnowledgeHomeHeader, title: String, expanded: Bool, toggle: @escaping () -> Void) -> some View {
+        Button(action: toggle) {
+            HStack(spacing: 4) {
+                Text(title)
+                    .font(.system(size: KnowledgeVisualTokens.sectionTitleSize, weight: .bold))
                 Image(systemName: expanded ? "chevron.up" : "chevron.down")
                     .font(.system(size: 14, weight: .semibold))
                     .frame(width: 44, height: 44)
+                Spacer()
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(expanded ? "收起\(title)" : "展开\(title)")
-            Spacer()
+            .contentShape(Rectangle())
+            .frame(maxWidth: .infinity, minHeight: KnowledgeHomeHeaderPolicy.minimumHitAreaHeight, alignment: .leading)
         }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("knowledge-group-\(KnowledgeHomeHeaderPolicy.toggleTarget(for: header).rawValue)")
+        .accessibilityLabel(expanded ? "收起\(title)" : "展开\(title)")
         .foregroundStyle(KnowledgeVisualTokens.primaryText)
         .padding(.leading, 24)
         .padding(.trailing, 11)

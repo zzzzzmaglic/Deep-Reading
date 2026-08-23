@@ -48,6 +48,17 @@ final class KnowledgeHomeCoordinatorTests: XCTestCase {
         XCTAssertEqual(KnowledgeRelativeDate.displayText(for: date(2025, 12, 31, 12, 0, calendar: calendar), now: now, calendar: calendar), "2025年12月31日")
     }
 
+    func testEachGroupHeaderHasItsOwnFullTapTargetAndToggleAction() {
+        XCTAssertEqual(KnowledgeHomeHeaderPolicy.minimumHitAreaHeight, 44)
+        XCTAssertEqual(KnowledgeHomeHeaderPolicy.toggleTarget(for: .collections), .collections)
+        XCTAssertEqual(KnowledgeHomeHeaderPolicy.toggleTarget(for: .tags), .tags)
+    }
+
+    func testSeedCoverAssetNamesAreAllExportedKnowledgeCovers() {
+        XCTAssertEqual(KnowledgeCoverAssetName.seedArticleAssetNames, ["KnowledgeCover1", "KnowledgeCover2", "KnowledgeCover3"])
+        XCTAssertTrue(KnowledgeCoverAssetName.seedArticleAssetNames.allSatisfy(KnowledgeCoverAssetName.isExported))
+    }
+
     private func collection(name: String, isSystem: Bool = false) -> KnowledgeCollection {
         KnowledgeCollection(id: UUID(), name: name, description: nil, isSystem: isSystem, visibleArticleCount: 0)
     }

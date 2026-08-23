@@ -56,6 +56,18 @@ final class KnowledgeBaseRepositoryTests: XCTestCase {
         XCTAssertEqual(remote.rpcCalls.first?.parameters["p_asset_ids"] as? [String], [firstID.uuidString, secondID.uuidString])
     }
 
+    func testCollectionPreviewRetainsExportedKnowledgeCoverAssetName() async throws {
+        let remote = FakeSupabaseKnowledgeBaseRemote()
+        remote.currentOwnerID = currentOwnerID
+        remote.rowsByTable = collectionArticleRows()
+        remote.rowsByTable["articles"] = [articleRow(id: visibleArticleID, title: "Visible", coverAssetName: "KnowledgeCover1")]
+        let repository = SupabaseKnowledgeBaseRepository(remote: remote)
+
+        let previews = try await repository.readCollectionArticles(collectionID: collectionID)
+
+        XCTAssertEqual(previews.single?.coverAssetName, "KnowledgeCover1")
+    }
+
     private func collectionArticleRows() -> [String: [[String: Any]]] {
         [
             "article_collections": [
@@ -86,14 +98,18 @@ final class KnowledgeBaseRepositoryTests: XCTestCase {
         return rows
     }
 
-    private func articleRow(id: UUID, title: String) -> [String: Any] {
+    private func articleRow(id: UUID, title: String, coverAssetName: String = "KnowledgeCoverPlaceholder") -> [String: Any] {
         [
             "id": id.uuidString,
             "title": title,
             "source_name": "Test source",
-            "cover_asset_name": "KnowledgeCoverPlaceholder",
+            "cover_asset_name": coverAssetName,
             "cognitive_dimension": "方法论",
             "published_at": "2026-08-23T00:00:00Z",
         ]
     }
+}
+
+private extension Collection where Element == KnowledgeArticlePreview {
+    var single: Element? { count == 1 ? first : nil }
 }

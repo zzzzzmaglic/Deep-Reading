@@ -66,6 +66,15 @@ final class CollectionDetailCoordinatorTests: XCTestCase {
         XCTAssertTrue(firstResult)
     }
 
+    func testLockedCollectionDoesNotAttachHorizontalSelectionGesture() {
+        XCTAssertFalse(CollectionDetailScreenPolicy.attachesSelectionGesture(isLockedCollection: true))
+        XCTAssertTrue(CollectionDetailScreenPolicy.attachesSelectionGesture(isLockedCollection: false))
+    }
+
+    func testDetailChromeRendersAboveTopProgressiveEdge() {
+        XCTAssertEqual(CollectionDetailScreenPolicy.topLayerOrder, [.progressiveEdge, .chrome])
+    }
+
     private func makeCollection(name: String, isSystem: Bool = false) -> KnowledgeCollection {
         KnowledgeCollection(id: UUID(), name: name, description: nil, isSystem: isSystem, visibleArticleCount: 2)
     }

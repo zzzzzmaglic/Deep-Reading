@@ -20,11 +20,7 @@ struct CollectionDetailScreen: View {
             ScrollView {
                 LazyVStack(spacing: KnowledgeVisualTokens.cardSpacing) {
                     ForEach(coordinator.articles) { article in
-                        KnowledgeArticleCard(article: article, selected: coordinator.selectedArticleIDs.contains(article.id)) {
-                            guard coordinator.selectedArticleIDs.isEmpty else { return }
-                            openArticle(article)
-                        }
-                        .simultaneousGesture(selectionGesture(for: article))
+                        articleCard(for: article)
                     }
                 }
                 .padding(.horizontal, KnowledgeVisualTokens.pageInset)
@@ -32,8 +28,8 @@ struct CollectionDetailScreen: View {
                 .padding(.bottom, coordinator.selectedArticleIDs.isEmpty ? 128 : 160)
             }
             .scrollIndicators(.hidden)
-            detailTopChrome
             detailTopEdge
+            detailTopChrome
         }
         .overlay(alignment: .bottom) {
             if !coordinator.isLockedCollection, !coordinator.selectedArticleIDs.isEmpty {
@@ -63,6 +59,18 @@ struct CollectionDetailScreen: View {
         DragGesture(minimumDistance: 24).onEnded { value in
             guard value.translation.width > 24, abs(value.translation.width) > abs(value.translation.height) else { return }
             coordinator.toggleSelection(articleID: article.id)
+        }
+    }
+
+    @ViewBuilder private func articleCard(for article: KnowledgeArticlePreview) -> some View {
+        let card = KnowledgeArticleCard(article: article, selected: coordinator.selectedArticleIDs.contains(article.id)) {
+            guard coordinator.selectedArticleIDs.isEmpty else { return }
+            openArticle(article)
+        }
+        if CollectionDetailScreenPolicy.attachesSelectionGesture(isLockedCollection: coordinator.isLockedCollection) {
+            card.simultaneousGesture(selectionGesture(for: article))
+        } else {
+            card
         }
     }
 

@@ -85,9 +85,9 @@ values
 update public.articles
 set
   cover_asset_name = case id
-    when '10000000-0000-0000-0000-000000000001'::uuid then 'FourForces'
-    when '10000000-0000-0000-0000-000000000002'::uuid then 'FigmaToolIcon'
-    when '10000000-0000-0000-0000-000000000003'::uuid then 'SummaryQuote'
+    when '10000000-0000-0000-0000-000000000001'::uuid then 'KnowledgeCover1'
+    when '10000000-0000-0000-0000-000000000002'::uuid then 'KnowledgeCover2'
+    when '10000000-0000-0000-0000-000000000003'::uuid then 'KnowledgeCover3'
   end,
   cognitive_dimension = case id
     when '10000000-0000-0000-0000-000000000001'::uuid then '商业与历史'
