@@ -1,6 +1,6 @@
 begin;
 
-select plan(11);
+select plan(14);
 
 insert into auth.users (id, aud, role, is_anonymous)
 values
@@ -143,6 +143,25 @@ select is(
     where id = '87777777-7777-7777-7777-777777777777'::uuid),
   1::bigint,
   'atomic batch delete leaves a valid asset intact when any requested asset is foreign'
+);
+
+select is(
+  has_table_privilege('authenticated', 'public.collection_article_exclusions', 'INSERT'),
+  false,
+  'forward migration leaves authenticated without direct exclusion INSERT privilege'
+);
+select is(
+  has_table_privilege('authenticated', 'public.collection_article_exclusions', 'DELETE'),
+  false,
+  'forward migration leaves authenticated without direct exclusion DELETE privilege'
+);
+select is(
+  (select count(*) from pg_policies
+    where schemaname = 'public'
+      and tablename = 'collection_article_exclusions'
+      and cmd in ('INSERT', 'DELETE')),
+  0::bigint,
+  'forward migration removes legacy direct exclusion write policies'
 );
 
 select * from finish();

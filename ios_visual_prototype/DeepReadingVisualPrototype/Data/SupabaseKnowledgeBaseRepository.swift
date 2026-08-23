@@ -32,8 +32,14 @@ final class SupabaseKnowledgeBaseRepository: KnowledgeBaseRepository, @unchecked
         async let membershipRows = remote.readRows(from: "article_collections")
         async let exclusionRows = remote.readRows(from: "collection_article_exclusions")
         async let tagRows = remote.readRows(from: "tags")
+        async let currentOwnerID = remote.readCurrentOwnerID()
 
-        let collections = try collections(from: try await collectionRows, memberships: try await membershipRows, exclusions: try await exclusionRows)
+        let collections = try collections(
+            from: try await collectionRows,
+            memberships: try await membershipRows,
+            exclusions: try await exclusionRows,
+            ownerID: try await currentOwnerID
+        )
         let tags = try (try await tagRows).map(tag(from:)).sorted { lhs, rhs in
             if lhs.isSystem != rhs.isSystem { return lhs.isSystem }
             return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
@@ -45,7 +51,13 @@ final class SupabaseKnowledgeBaseRepository: KnowledgeBaseRepository, @unchecked
         async let collectionRows = remote.readRows(from: "collections")
         async let membershipRows = remote.readRows(from: "article_collections")
         async let exclusionRows = remote.readRows(from: "collection_article_exclusions")
-        let collections = try collections(from: try await collectionRows, memberships: try await membershipRows, exclusions: try await exclusionRows)
+        async let currentOwnerID = remote.readCurrentOwnerID()
+        let collections = try collections(
+            from: try await collectionRows,
+            memberships: try await membershipRows,
+            exclusions: try await exclusionRows,
+            ownerID: try await currentOwnerID
+        )
         guard let collection = collections.first(where: { $0.id == id }) else {
             throw SupabaseKnowledgeBaseRepositoryError.unreadableCollection(id)
         }
@@ -119,9 +131,13 @@ final class SupabaseKnowledgeBaseRepository: KnowledgeBaseRepository, @unchecked
     private func collections(
         from collectionRows: [[String: Any]],
         memberships: [[String: Any]],
-        exclusions: [[String: Any]]
+        exclusions: [[String: Any]],
+        ownerID: UUID
     ) throws -> [KnowledgeCollection] {
-        let hiddenPairs = try Set(exclusions.map { row in
+        let hiddenPairs: Set<String> = try Set(exclusions.compactMap { row -> String? in
+            guard try requiredUUID(in: row, column: "owner_id", table: "collection_article_exclusions") == ownerID else {
+                return nil
+            }
             let collectionID = try requiredUUID(in: row, column: "collection_id", table: "collection_article_exclusions")
             let articleID = try requiredUUID(in: row, column: "article_id", table: "collection_article_exclusions")
             return "\(collectionID.uuidString):\(articleID.uuidString)"

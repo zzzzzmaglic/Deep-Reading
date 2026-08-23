@@ -22,6 +22,19 @@ final class KnowledgeBaseRepositoryTests: XCTestCase {
         XCTAssertEqual(articles.map(\.id), [visibleArticleID])
     }
 
+    func testHomeAndCollectionCountsExcludeOnlyCurrentOwnersRows() async throws {
+        let remote = FakeSupabaseKnowledgeBaseRemote()
+        remote.currentOwnerID = currentOwnerID
+        remote.rowsByTable = collectionCountRows()
+        let repository = SupabaseKnowledgeBaseRepository(remote: remote)
+
+        let home = try await repository.readHome()
+        let collection = try await repository.readCollection(id: collectionID)
+
+        XCTAssertEqual(home.collections.first?.visibleArticleCount, 1)
+        XCTAssertEqual(collection.visibleArticleCount, 1)
+    }
+
     func testRemoveArticlesUsesTheAtomicCollectionRPC() async throws {
         let remote = FakeSupabaseKnowledgeBaseRemote()
         let repository = SupabaseKnowledgeBaseRepository(remote: remote)
@@ -59,6 +72,18 @@ final class KnowledgeBaseRepositoryTests: XCTestCase {
             ],
             "reading_assets": [["id": UUID().uuidString, "article_id": visibleArticleID.uuidString]],
         ]
+    }
+
+    private func collectionCountRows() -> [String: [[String: Any]]] {
+        var rows = collectionArticleRows()
+        rows["collections"] = [[
+            "id": collectionID.uuidString,
+            "name": "Test collection",
+            "description": "Owner-scoped exclusions",
+            "is_system": false,
+        ]]
+        rows["tags"] = []
+        return rows
     }
 
     private func articleRow(id: UUID, title: String) -> [String: Any] {
