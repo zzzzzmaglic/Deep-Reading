@@ -57,7 +57,7 @@
 
 ---
 
-### Task 10.1: 数据库安全契约与原生数据层
+### Task 1 (Task 10.1): 数据库安全契约与原生数据层
 
 **Files:**
 - Create: `supabase/migrations/202608230001_task10_knowledge_base.sql`
@@ -259,7 +259,7 @@ git commit -m "feat: add knowledge base data contracts"
 
 ---
 
-### Task 10.2: 知识库首页与集合详情
+### Task 2 (Task 10.2): 知识库首页与集合详情
 
 **Files:**
 - Create: `ios_visual_prototype/DeepReadingVisualPrototype/Knowledge/KnowledgeVisualTokens.swift`
@@ -389,7 +389,7 @@ git commit -m "feat: add knowledge home and collection browsing"
 
 ---
 
-### Task 10.3: 标签详情与阅读资产卡片复用
+### Task 3 (Task 10.3): 标签详情与阅读资产卡片复用
 
 **Files:**
 - Create: `ios_visual_prototype/DeepReadingVisualPrototype/Assets/ReadingAssetListRow.swift`
@@ -520,7 +520,7 @@ git commit -m "feat: add tag asset browsing and actions"
 
 ---
 
-### Task 10.4: 根 Tab 导航、阅读器返回与端到端验收
+### Task 4 (Task 10.4): 根 Tab 导航、阅读器返回与端到端验收
 
 **Files:**
 - Modify: `ios_visual_prototype/DeepReadingVisualPrototype/DeepReadingVisualPrototypeApp.swift`
