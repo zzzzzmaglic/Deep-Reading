@@ -5,3 +5,9 @@
 - XCTest: no reliable executed count. The focused `xcodebuild test` command initially failed before compilation because the sandbox could not write the SwiftPM manifest diagnostic cache. After approval, Xcode resolved packages but exited before producing build/test logs or the requested `.xcresult`; the existing app binary timestamp did not advance. Do not treat XCTest as green until this host-level Xcode interruption is resolved.
 - Verified instead: `xcrun swiftc -parse` covered all changed/new Swift sources and both focused test sources; `plutil -lint` accepted `project.pbxproj`; `git diff --check` passed.
 - Remaining concern: full XCTest and simulator visual acceptance remain blocked by the host Xcode execution interruption, not by a Supabase reset. `supabase/.branches/` and `supabase/.temp/` were not touched.
+
+## Fix round 1
+
+- Root cause: XCTest assertions are synchronous autoclosures, so they cannot await coordinator calls; Swift also cannot compare `[(UUID, [UUID])]` because that tuple does not conform to `Equatable`.
+- Fix: awaited mutation outcomes into local values, then asserted them; changed recorded normal-tag request assertions to count, tag ID, and asset IDs.
+- Green: focused iPhone 16 / iOS 26.5 XCTest ran 52 tests — 52 passed, 0 failed, 0 skipped. `git diff --check` passed.

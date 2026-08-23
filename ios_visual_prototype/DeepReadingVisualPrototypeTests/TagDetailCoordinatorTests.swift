@@ -15,7 +15,9 @@ final class TagDetailCoordinatorTests: XCTestCase {
         let deleteBatches = await repository.deleteAssetBatches
 
         XCTAssertTrue(succeeded)
-        XCTAssertEqual(removeRequests, [(fixture.normalTag.id, [fixture.asset.id])])
+        XCTAssertEqual(removeRequests.count, 1)
+        XCTAssertEqual(removeRequests.first?.0, fixture.normalTag.id)
+        XCTAssertEqual(removeRequests.first?.1, [fixture.asset.id])
         XCTAssertEqual(deleteBatches, [])
     }
 
@@ -28,8 +30,9 @@ final class TagDetailCoordinatorTests: XCTestCase {
         coordinator.toggleSelection(fixture.asset.id)
 
         XCTAssertEqual(coordinator.selectionAction, .deleteAssets)
-        XCTAssertTrue(await coordinator.applySelectionAction())
+        let succeeded = await coordinator.applySelectionAction()
         let deleteBatches = await repository.deleteAssetBatches
+        XCTAssertTrue(succeeded)
         XCTAssertEqual(deleteBatches, [[fixture.asset.id]])
     }
 
@@ -88,7 +91,8 @@ final class TagDetailCoordinatorTests: XCTestCase {
         await coordinator.load(tagID: fixture.normalTag.id)
         coordinator.toggleSelection(fixture.asset.id)
 
-        XCTAssertFalse(await coordinator.applySelectionAction())
+        let succeeded = await coordinator.applySelectionAction()
+        XCTAssertFalse(succeeded)
         XCTAssertEqual(coordinator.assets.map(\.id), [fixture.asset.id])
         XCTAssertEqual(coordinator.selectedAssetIDs, [fixture.asset.id])
     }
@@ -103,10 +107,14 @@ final class TagDetailCoordinatorTests: XCTestCase {
         let first = Task { @MainActor in await coordinator.applySelectionAction() }
         while !coordinator.isMutating { await Task.yield() }
 
-        XCTAssertFalse(await coordinator.applySelectionAction())
-        XCTAssertTrue(await first.value)
+        let concurrentSucceeded = await coordinator.applySelectionAction()
+        let firstSucceeded = await first.value
+        XCTAssertFalse(concurrentSucceeded)
+        XCTAssertTrue(firstSucceeded)
         let removeRequests = await repository.removeTagRequests
-        XCTAssertEqual(removeRequests, [(fixture.normalTag.id, [fixture.asset.id])])
+        XCTAssertEqual(removeRequests.count, 1)
+        XCTAssertEqual(removeRequests.first?.0, fixture.normalTag.id)
+        XCTAssertEqual(removeRequests.first?.1, [fixture.asset.id])
     }
 }
 
