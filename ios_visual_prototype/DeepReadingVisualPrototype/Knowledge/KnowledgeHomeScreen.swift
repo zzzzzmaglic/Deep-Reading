@@ -2,7 +2,7 @@ import SwiftUI
 
 struct KnowledgeHomeScreen: View {
     @StateObject private var coordinator: KnowledgeHomeCoordinator
-    @State private var compactTitle = false
+    @State private var scrollOffset: CGFloat = 0
 
     init(repository: any KnowledgeBaseRepository) {
         _coordinator = StateObject(wrappedValue: KnowledgeHomeCoordinator(repository: repository))
@@ -13,30 +13,33 @@ struct KnowledgeHomeScreen: View {
             KnowledgeVisualTokens.background.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    GeometryReader { proxy in
-                        Color.clear.preference(key: KnowledgeHomeScrollOffsetKey.self, value: proxy.frame(in: .named("knowledge-home-scroll")).minY)
-                    }
-                    .frame(height: 0)
                     Text("知识库")
                         .font(.system(size: KnowledgeVisualTokens.titleSize, weight: .bold))
                         .foregroundStyle(KnowledgeVisualTokens.primaryText)
-                        .padding(.top, 58)
+                        .padding(.top, 56)
                         .padding(.leading, 24)
+                        // The compact title takes over at the beginning of
+                        // its upward slide rather than cross-fading with this
+                        // scroll title beneath the progressive edge.
+                        .opacity(KnowledgeHomeTitleCollapsePolicy.largeTitleOpacity(for: scrollOffset))
+                        .animation(nil, value: KnowledgeHomeTitleCollapsePolicy.isCompactTitlePresented(for: scrollOffset))
                     groupHeader(header: .collections, title: "推文合集", expanded: coordinator.collectionsExpanded, toggle: coordinator.toggleCollections)
                         .padding(.top, 20)
                     KnowledgeGroupList(
                         items: coordinator.visibleCollections,
                         isSystem: \.isSystem,
                         title: \.name,
+                        itemCount: { $0.visibleArticleCount },
                         accessibilityIdentifier: { KnowledgeAccessibilityIdentifier.collection($0.id) },
                         destination: { .collection($0.id) }
                     )
                     groupHeader(header: .tags, title: "标签", expanded: coordinator.tagsExpanded, toggle: coordinator.toggleTags)
-                        .padding(.top, 30)
+                        .padding(.top, 24)
                     KnowledgeGroupList(
                         items: coordinator.visibleTags,
                         isSystem: \.isSystem,
                         title: \.name,
+                        itemCount: { coordinator.tagAssetCounts[$0.id, default: 0] },
                         accessibilityIdentifier: { KnowledgeAccessibilityIdentifier.tag($0.id) },
                         destination: { .tag($0.id) }
                     )
@@ -44,42 +47,83 @@ struct KnowledgeHomeScreen: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .coordinateSpace(name: "knowledge-home-scroll")
             .scrollIndicators(.hidden)
-            .onPreferenceChange(KnowledgeHomeScrollOffsetKey.self) { compactTitle = $0 < -45 }
+            // GeometryReader preferences can be coalesced while a scroll view
+            // is decelerating. Use the platform scroll geometry callback so
+            // the compact title follows every real content-offset update.
+            .onScrollGeometryChange(for: CGFloat.self, of: { geometry in
+                // Only actual upward content travel collapses the title. A
+                // magnitude check would also react to an overscroll bounce on
+                // a short, still-loading list and falsely reveal the compact
+                // title while the large title has not moved under the edge.
+                max(0, geometry.contentOffset.y)
+            }, action: { _, offset in
+                scrollOffset = offset
+            })
 
             knowledgeTopEdge
-            if compactTitle {
-                Text("知识库")
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(KnowledgeVisualTokens.primaryText)
-                    .padding(.top, 61)
-            }
+            Text("知识库")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(KnowledgeVisualTokens.primaryText)
+                // The ZStack's content begins beneath the 59pt status-area
+                // safe area. A 2pt local inset therefore places this title at
+                // the Figma y=61 baseline instead of incorrectly at y=120.
+                .padding(.top, KnowledgeHomeTitleCollapsePolicy.compactTitleTopInset)
+                // This is a scroll-driven upward entrance, not a fade. At
+                // the reveal threshold it appears 18pt below final position,
+                // then reaches the title bar as the content moves to 51pt.
+                .offset(y: KnowledgeHomeTitleCollapsePolicy.compactTitleVerticalOffset(for: scrollOffset))
+                .opacity(KnowledgeHomeTitleCollapsePolicy.isCompactTitlePresented(for: scrollOffset) ? 1 : 0)
+                .animation(nil, value: KnowledgeHomeTitleCollapsePolicy.isCompactTitlePresented(for: scrollOffset))
+                .accessibilityHidden(!KnowledgeHomeTitleCollapsePolicy.isCompactTitlePresented(for: scrollOffset))
+                .accessibilityIdentifier("knowledge-home-compact-title")
         }
         .task { await coordinator.load() }
         .overlay(alignment: .bottom) { knowledgeBottomEdge }
     }
 
     private func groupHeader(header: KnowledgeHomeHeader, title: String, expanded: Bool, toggle: @escaping () -> Void) -> some View {
-        Button(action: toggle) {
-            HStack(spacing: 4) {
+        HStack(spacing: 0) {
+            HStack(spacing: KnowledgeHomeHeaderPolicy.titleToDisclosureOverlap) {
                 Text(title)
                     .font(.system(size: KnowledgeVisualTokens.sectionTitleSize, weight: .bold))
-                Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                    .font(.system(size: 14, weight: .semibold))
-                    .frame(width: 44, height: 44)
-                Spacer()
+                    .fixedSize()
+                Button(action: toggle) {
+                    Image("KnowledgeDisclosure")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(
+                            width: KnowledgeHomeHeaderPolicy.disclosureGlyphSize,
+                            height: KnowledgeHomeHeaderPolicy.disclosureGlyphSize
+                        )
+                        .rotationEffect(.degrees(KnowledgeHomeHeaderPolicy.disclosureRotationDegrees(isExpanded: expanded)))
+                        .offset(x: KnowledgeHomeHeaderPolicy.disclosureVisualOffsetX)
+                        .frame(
+                            width: KnowledgeHomeHeaderPolicy.disclosureHitArea,
+                            height: KnowledgeHomeHeaderPolicy.disclosureHitArea
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("knowledge-group-\(KnowledgeHomeHeaderPolicy.toggleTarget(for: header).rawValue)")
+                .accessibilityLabel(expanded ? "收起\(title)" : "展开\(title)")
+                .animation(.easeInOut(duration: 0.18), value: expanded)
             }
-            .contentShape(Rectangle())
-            .frame(maxWidth: .infinity, minHeight: KnowledgeHomeHeaderPolicy.minimumHitAreaHeight, alignment: .leading)
+            .frame(height: KnowledgeHomeHeaderPolicy.disclosureHitArea, alignment: .leading)
+            Spacer(minLength: 0)
+            Image("KnowledgeAdd")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 20, height: 20)
+                .accessibilityHidden(true)
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("knowledge-group-\(KnowledgeHomeHeaderPolicy.toggleTarget(for: header).rawValue)")
-        .accessibilityLabel(expanded ? "收起\(title)" : "展开\(title)")
         .foregroundStyle(KnowledgeVisualTokens.primaryText)
         .padding(.leading, 24)
-        .padding(.trailing, 11)
-        .frame(height: 52)
+        .padding(.trailing, 28)
+        .frame(height: KnowledgeHomeHeaderPolicy.disclosureHitArea)
+        .padding(.bottom, 3)
+        // This header has a stable identity. Only the glyph rotation receives
+        // an animation; inserting rows therefore does not redraw the title.
     }
 
     @ViewBuilder private var knowledgeTopEdge: some View {
@@ -103,6 +147,7 @@ private struct KnowledgeGroupList<Item: Identifiable>: View {
     let items: [Item]
     let isSystem: KeyPath<Item, Bool>
     let title: KeyPath<Item, String>
+    let itemCount: (Item) -> Int
     let accessibilityIdentifier: (Item) -> String
     let destination: (Item) -> KnowledgeNavigationDestination
 
@@ -110,32 +155,38 @@ private struct KnowledgeGroupList<Item: Identifiable>: View {
         VStack(spacing: 0) {
             ForEach(items) { item in
                 NavigationLink(value: destination(item)) {
-                    HStack(spacing: 10) {
+                    HStack(spacing: 12) {
                         Text(item[keyPath: title]).font(.system(size: 16, weight: item[keyPath: isSystem] ? .medium : .regular))
                         Spacer()
+                        if itemCount(item) > 0 {
+                            Text("\(itemCount(item))")
+                                .font(.system(size: 17, weight: .regular))
+                                .foregroundStyle(KnowledgeVisualTokens.secondaryText)
+                                .frame(minWidth: 24, alignment: .trailing)
+                        }
                         Image(systemName: item[keyPath: isSystem] ? "lock.fill" : "chevron.right")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(KnowledgeVisualTokens.secondaryText)
+                            .frame(width: 16, height: 16)
                     }
                     .padding(.horizontal, 16)
-                    .frame(height: KnowledgeVisualTokens.rowHeight)
+                    .frame(height: rowHeight(for: item))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier(accessibilityIdentifier(item))
                 .accessibilityValue(item[keyPath: isSystem] ? "system" : "user")
-                if item.id != items.last?.id { Divider().padding(.leading, 16).overlay(KnowledgeVisualTokens.divider) }
+                if item.id != items.last?.id { Divider().padding(.horizontal, 16).overlay(KnowledgeVisualTokens.divider) }
             }
         }
         .frame(width: KnowledgeVisualTokens.groupWidth)
         .background(.white, in: RoundedRectangle(cornerRadius: KnowledgeVisualTokens.groupCornerRadius))
         .padding(.horizontal, KnowledgeVisualTokens.pageInset)
     }
-}
 
-private struct KnowledgeHomeScrollOffsetKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+    private func rowHeight(for item: Item) -> CGFloat {
+        item.id == items.last?.id ? KnowledgeVisualTokens.rowHeight - 4 : KnowledgeVisualTokens.rowHeight
+    }
 }
 
 enum KnowledgeRelativeDate {

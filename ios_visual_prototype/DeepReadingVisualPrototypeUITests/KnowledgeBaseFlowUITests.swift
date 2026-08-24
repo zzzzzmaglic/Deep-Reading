@@ -3,6 +3,36 @@ import XCTest
 final class KnowledgeBaseFlowUITests: XCTestCase {
     private var app: XCUIApplication!
 
+    func testKnowledgeHomeScrollRevealsItsCompactTitle() throws {
+        app = XCUIApplication()
+        app.terminate()
+        app.launch()
+        if app.otherElements["app-root-configuration-error"].waitForExistence(timeout: 3) {
+            throw XCTSkip("Local Supabase configuration was not supplied to the built app.")
+        }
+
+        XCTAssertTrue(app.buttons["knowledge-group-collections"].waitForExistence(timeout: 12))
+        let firstCollection = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "knowledge-collection-")
+        ).firstMatch
+        XCTAssertTrue(
+            firstCollection.waitForExistence(timeout: 12),
+            "Wait for real list content before asserting a scroll-dependent title state."
+        )
+
+        let homeScrollView = app.scrollViews.firstMatch
+        XCTAssertTrue(homeScrollView.waitForExistence(timeout: 4))
+        homeScrollView.swipeUp()
+
+        let compactTitle = app.staticTexts["knowledge-home-compact-title"]
+        XCTAssertTrue(compactTitle.waitForExistence(timeout: 4))
+        XCTAssertLessThan(
+            compactTitle.frame.minY,
+            90,
+            "After scrolling, the compact title must occupy the top 116pt chrome rather than the content area."
+        )
+    }
+
     func testKnowledgeTagAssetCardReturnsFromAnchoredReader() throws {
         try launchWithLocalSupabaseAndSeededHighlight()
         let reader = app.textViews["reader-text-view"]

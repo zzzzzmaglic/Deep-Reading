@@ -4,6 +4,35 @@
 
 ## 当前交接
 
+### Task 10 知识库 Tab 闪烁与下拉收起态修复 -> 用户手工验收
+
+- 日期：2026-08-24
+- 已完成：Tab 选中底板改为单个、始终存在的 iOS 26 Liquid Glass 胶囊；它只通过一个 `.smooth` 动画改变水平位置。移除了“按钮 `withAnimation` + 胶囊隐式动画”的双重事务，以及移动胶囊自己的 `.interactive()` 材质状态，避免切换时深色胶囊重采样、闪烁。外层 Tab Bar 仍是原生 `GlassEffectContainer` / `.glassEffect`，所选图标与文字仍为系统蓝。
+- 已完成：知识库标题收起改为 `ScrollView.onScrollGeometryChange` 的实际、正向 `contentOffset.y`；只有真实向上滚动超过 35–51 pt 时，中心 17 pt“知识库”才在 y=61 pt 的 116 pt 渐进虚化区淡入。下拉回顶部会反向淡出。此前错误地取 offset 绝对值，短列表的回弹也会被误判为滚动，造成自动化验收假阳性。
+- 验证：iPhone 16 / iOS 26.5 ARM64，`KnowledgeHomeCoordinatorTests` 6/6 和“等待真实首页列表加载后、直接滑动 ScrollView”的 UI 回归 1/1 通过；Debug build、`git diff --check` 通过。未重置 Supabase、未输出配置值。
+- 待确认项 / 风险：本轮未提交、未推送。请在 Simulator 亲手切换两项 Tab，观察深色玻璃胶囊是否连续平移、无闪烁；并在首页上滑后确认大标题被顶部虚化覆盖时出现中央紧凑标题。`supabase/.branches/`、`supabase/.temp/` 仍未触碰、未暂存。
+- 下一步：仅根据这两项手工验收反馈做局部视觉/动效调整。
+
+### Task 10 知识库首页滚动标题、展开方向与原生 Tab 选中动效 -> 用户手工验收
+
+- 日期：2026-08-24
+- 已完成：通过 Figma MCP 重读 `12a 知识库 · 下拉收起态`（`245:517`）、`13 合集详情 · 深度阅读`（`116:355`）和 `15 标签详情 · 商业化`（`119:355`）。首页的折叠态现在用右向箭头表示“当前仅展示至多五项、可展开”，展开后的完整列表用下向箭头表示“当前已展开”；两个图标均在原位基础上右移 1 pt，且仍只有 44×44 pt 图标区可点击。标题与箭头不再随条目插入重建，避免此前展开时的闪动。
+- 已完成：大号“知识库”随 `ScrollView` 向上进入同一块 116 pt 顶部渐进虚化；滚动偏移 35–51 pt 时，中央 17 pt 的紧凑标题连续淡入，而非二元跳变。合集详情和标签详情的内容第一条统一从汇总页相同的 y=123 pt 基线开始；集合卡片间隔为 5 pt，标签资产行间隔为 8 pt。
+- 已完成：保留 Figma 的左下自定义布局，但选中 Tab 的胶囊现为 iOS 26 `GlassEffectContainer` 内单个持续存在的真实 Liquid Glass surface，并以唯一的 SwiftUI `.smooth` 位移动画移至另一项；所选图标/文字为系统蓝 `#007AFF`。这不使用静态灰色背景切换，也不再叠加 `glassEffectID` 与几何动画。
+- 验证：iPhone 16 / iOS 26.5 ARM64 的知识库相关单元测试通过；Debug build 通过，已安装并启动到知识库首页，截图为 `/private/tmp/knowledge-home-latest.png`。一次完整测试中 158 个单元测试通过、1 个预期跳过；两条既有 UI 测试被 Simulator 测试运行器以 `SIGKILL` 终止（不是断言失败），需在后续环境稳定时单独复跑，不据此推断本轮页面代码失败。
+- 待确认项 / 风险：本轮未提交、未推送。请手工确认 Tab 在两项之间切换时的玻璃胶囊运动、首页向下滚动时的标题收起、以及箭头展开/收起过程。既有 `supabase/.branches/`、`supabase/.temp/` 未触碰、未暂存。
+- 下一步：仅根据手工视觉/交互反馈做局部校准；先在稳定 Simulator 上复跑那两条既有 UI 测试。
+
+### Task 10 知识库首页 Figma 12/12b 视觉与玻璃 Tab Bar -> 用户手工验收
+
+- 日期：2026-08-24
+- 已完成：通过 Figma MCP 逐项读取并对照 `12 知识库 · 首页`（`114:355`）与 `12b 知识库 · 合集与标签收起`（`507:998`）。首页标题、分组、5 行连续列表、数量、分隔线和标签区均收齐到 393×852 基准：`#F2F2F7` 背景、371×231/18 pt 列表卡、47/47/47/47/43 pt 行、x=27 的 339 pt 分隔线、116 pt 上下渐进虚化。首页读取现同时统计当前 owner 的 `asset_tags`，所以标签右侧会显示真实资产数量（零值不显示）；无迁移、无 reset。
+- 交互与视觉：分组标题外层不再是整行 Button，只有 Figma 对应的 44×44 pt 展开箭头命中区可触发；同一枚 Figma 导出的 22 pt 右箭头在默认五行收起态保持向右、展开更多条目后旋转向下，不再替换 SF Symbol。旧实现的整行 Button 与上/下 chevron 换节点会在同步插入列表时触发重布局，造成标题/箭头闪动；现用稳定 SVG、固定 44 pt 容器和仅对 glyph 的局部动画消除该重建来源。
+- Tab Bar：系统 `TabView` 在 iOS 26 会强制把 bar 居中，无法符合 Figma 左下 `x=20 / y=760 / 208×62 pt`。现保留应用的两个语义 tab，但改用 iOS 26 原生 `GlassEffectContainer` + `.glassEffect(.regular.interactive(), in: Capsule())` 自定义承载，位置、20 pt Figma 首页/知识库图标和选中胶囊均按 Frame 12 对齐；不会与系统底栏叠加。阅读器、汇总页仍隐藏该 bar，Tab 切换不重建知识库导航栈。
+- 验证：先以缺少 disclosure 几何/方向 API 的 XCTest 编译失败取得红灯；实现后知识库聚焦测试 10/10 通过。iPhone 16 / iOS 26.5 ARM64 全量 XCTest 157 executed、1 expected skip、0 failed；3 条真实 UI 流（知识库标签→资产卡片→锚点阅读器→返回，同步汇总两条路径）3/3 通过；Debug build、`git diff --check` 均通过。最终 Debug App 已重装到 `Deep Reading · iPhone 16` 并启动至知识库首页；截图为 `/private/tmp/knowledge-home-geometry-final.png`。
+- 待确认项 / 风险：本轮未提交、未推送。请手工确认箭头点击与展开过程的触感无闪烁，以及 Figma 12 位置和玻璃观感。`supabase/.branches/`、`supabase/.temp/` 是既有未跟踪运行目录，未触碰、未暂存。
+- 下一步：只根据用户的手工视觉/交互反馈继续局部校准；不要重置本机 Supabase 数据。
+
 ### Task 10.4 原生知识库根导航 -> 已完成自动化本机验收，等待手工视觉验收
 
 - 日期：2026-08-24

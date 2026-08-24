@@ -36,6 +36,7 @@ final class SupabaseKnowledgeBaseRepository: KnowledgeBaseRepository, @unchecked
         async let membershipRows = remote.readRows(from: "article_collections")
         async let exclusionRows = remote.readRows(from: "collection_article_exclusions")
         async let tagRows = remote.readRows(from: "tags")
+        async let assetTagRows = remote.readRows(from: "asset_tags")
         async let currentOwnerID = remote.readCurrentOwnerID()
 
         let collections = try collections(
@@ -48,7 +49,15 @@ final class SupabaseKnowledgeBaseRepository: KnowledgeBaseRepository, @unchecked
             if lhs.isSystem != rhs.isSystem { return lhs.isSystem }
             return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
         }
-        return KnowledgeHomeSnapshot(collections: collections, tags: tags)
+        let ownerID = try await currentOwnerID
+        let visibleTagIDs = Set(tags.map(\.id))
+        let tagAssetCounts = try (try await assetTagRows).reduce(into: [UUID: Int]()) { counts, row in
+            guard try requiredUUID(in: row, column: "owner_id", table: "asset_tags") == ownerID else { return }
+            let tagID = try requiredUUID(in: row, column: "tag_id", table: "asset_tags")
+            guard visibleTagIDs.contains(tagID) else { return }
+            counts[tagID, default: 0] += 1
+        }
+        return KnowledgeHomeSnapshot(collections: collections, tags: tags, tagAssetCounts: tagAssetCounts)
     }
 
     func readCollection(id: UUID) async throws -> KnowledgeCollection {

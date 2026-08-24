@@ -11,6 +11,17 @@ struct KnowledgeCollection: Sendable, Equatable, Identifiable {
 struct KnowledgeHomeSnapshot: Sendable, Equatable {
     let collections: [KnowledgeCollection]
     let tags: [Tag]
+    let tagAssetCounts: [UUID: Int]
+
+    init(
+        collections: [KnowledgeCollection],
+        tags: [Tag],
+        tagAssetCounts: [UUID: Int] = [:]
+    ) {
+        self.collections = collections
+        self.tags = tags
+        self.tagAssetCounts = tagAssetCounts
+    }
 }
 
 struct KnowledgeArticlePreview: Sendable, Equatable, Identifiable {

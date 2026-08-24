@@ -18,13 +18,13 @@ struct CollectionDetailScreen: View {
         ZStack(alignment: .top) {
             KnowledgeVisualTokens.background.ignoresSafeArea()
             ScrollView {
-                LazyVStack(spacing: KnowledgeVisualTokens.cardSpacing) {
+                LazyVStack(spacing: KnowledgeDetailLayout.collectionCardSpacing) {
                     ForEach(coordinator.articles) { article in
                         articleCard(for: article)
                     }
                 }
                 .padding(.horizontal, KnowledgeVisualTokens.pageInset)
-                .padding(.top, 116)
+                .padding(.top, KnowledgeDetailLayout.contentTopInset)
                 .padding(.bottom, coordinator.selectedArticleIDs.isEmpty ? 128 : 160)
             }
             .scrollIndicators(.hidden)
@@ -130,10 +130,14 @@ private struct KnowledgeArticleCard: View {
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, KnowledgeDetailLayout.collectionCardContentInset)
             .frame(height: KnowledgeVisualTokens.cardHeight)
             .background(selected ? Color.black.opacity(0.08) : .white)
             .clipShape(RoundedRectangle(cornerRadius: KnowledgeVisualTokens.cardCornerRadius))
+            .overlay {
+                RoundedRectangle(cornerRadius: KnowledgeVisualTokens.cardCornerRadius)
+                    .stroke(Color(hex: 0xECEBE7), lineWidth: 1)
+            }
         }
         .buttonStyle(.plain)
     }

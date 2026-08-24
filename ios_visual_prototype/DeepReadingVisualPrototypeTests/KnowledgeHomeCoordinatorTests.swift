@@ -48,10 +48,45 @@ final class KnowledgeHomeCoordinatorTests: XCTestCase {
         XCTAssertEqual(KnowledgeRelativeDate.displayText(for: date(2025, 12, 31, 12, 0, calendar: calendar), now: now, calendar: calendar), "2025年12月31日")
     }
 
-    func testEachGroupHeaderHasItsOwnFullTapTargetAndToggleAction() {
-        XCTAssertEqual(KnowledgeHomeHeaderPolicy.minimumHitAreaHeight, 44)
+    func testEachGroupHeaderUsesTheFigmaDisclosureGeometryAndDirection() {
+        XCTAssertEqual(KnowledgeHomeHeaderPolicy.disclosureHitArea, 44)
+        XCTAssertEqual(KnowledgeHomeHeaderPolicy.disclosureGlyphSize, 22)
+        XCTAssertEqual(KnowledgeHomeHeaderPolicy.titleToDisclosureOverlap, -11)
+        XCTAssertFalse(KnowledgeHomeHeaderPolicy.hasFullRowTapTarget)
+        // A right chevron means the compact, five-item state can be expanded;
+        // a down chevron means the full group is currently shown.
+        XCTAssertEqual(KnowledgeHomeHeaderPolicy.disclosureRotationDegrees(isExpanded: false), 0)
+        XCTAssertEqual(KnowledgeHomeHeaderPolicy.disclosureRotationDegrees(isExpanded: true), 90)
+        XCTAssertEqual(KnowledgeHomeHeaderPolicy.disclosureVisualOffsetX, 1)
         XCTAssertEqual(KnowledgeHomeHeaderPolicy.toggleTarget(for: .collections), .collections)
         XCTAssertEqual(KnowledgeHomeHeaderPolicy.toggleTarget(for: .tags), .tags)
+        XCTAssertTrue(KnowledgeTabBarPolicy.usesNativeLiquidGlass)
+        XCTAssertEqual(KnowledgeTabBarPolicy.itemCount, 2)
+        XCTAssertTrue(KnowledgeTabBarPolicy.hasMovingSelectionPill)
+        XCTAssertEqual(KnowledgeTabBarPolicy.selectedContentTintHex, 0x007AFF)
+        XCTAssertFalse(KnowledgeTabBarPolicy.containerUsesInteractiveGlass)
+        XCTAssertFalse(KnowledgeTabBarPolicy.selectionPillUsesLiquidGlass)
+        XCTAssertTrue(KnowledgeTabBarPolicy.selectionPillUsesStableFill)
+        XCTAssertEqual(KnowledgeTabBarPolicy.selectionCommitDelayMilliseconds, 240)
+    }
+
+    func testKnowledgeHomeTitleAndDetailContentUseTheSharedScrollChromeGeometry() {
+        XCTAssertEqual(KnowledgeHomeTitleCollapsePolicy.compactTitleTopInset, 2)
+        XCTAssertEqual(KnowledgeHomeTitleCollapsePolicy.compactTitleRevealOffset, 35)
+        XCTAssertEqual(KnowledgeHomeTitleCollapsePolicy.compactTitleFullyVisibleOffset, 51)
+        XCTAssertEqual(KnowledgeHomeTitleCollapsePolicy.compactTitleSlideDistance, 18)
+        XCTAssertFalse(KnowledgeHomeTitleCollapsePolicy.isCompactTitlePresented(for: 34))
+        XCTAssertTrue(KnowledgeHomeTitleCollapsePolicy.isCompactTitlePresented(for: 35))
+        XCTAssertEqual(KnowledgeHomeTitleCollapsePolicy.compactTitleVerticalOffset(for: 35), 18)
+        XCTAssertEqual(KnowledgeHomeTitleCollapsePolicy.compactTitleVerticalOffset(for: 43), 9)
+        XCTAssertEqual(KnowledgeHomeTitleCollapsePolicy.compactTitleVerticalOffset(for: 51), 0)
+        XCTAssertEqual(KnowledgeHomeTitleCollapsePolicy.largeTitleOpacity(for: 34), 1)
+        XCTAssertEqual(KnowledgeHomeTitleCollapsePolicy.largeTitleOpacity(for: 35), 0)
+        XCTAssertTrue(KnowledgeTabBarPolicy.usesSinglePersistentSelectionSurface)
+        XCTAssertTrue(KnowledgeTabBarPolicy.usesSingleAnimationDriver)
+        XCTAssertEqual(KnowledgeDetailLayout.contentTopInset, 123)
+        XCTAssertEqual(KnowledgeDetailLayout.collectionCardSpacing, 5)
+        XCTAssertEqual(KnowledgeDetailLayout.tagAssetSpacing, 8)
     }
 
     func testSeedCoverAssetNamesAreAllExportedKnowledgeCovers() {

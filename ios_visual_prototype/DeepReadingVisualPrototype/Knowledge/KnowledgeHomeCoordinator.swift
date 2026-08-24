@@ -28,6 +28,10 @@ final class KnowledgeHomeCoordinator: ObservableObject {
         visible(sortedTags, expanded: tagsExpanded)
     }
 
+    var tagAssetCounts: [UUID: Int] {
+        snapshot?.tagAssetCounts ?? [:]
+    }
+
     func load() async {
         do {
             snapshot = try await repository.readHome()

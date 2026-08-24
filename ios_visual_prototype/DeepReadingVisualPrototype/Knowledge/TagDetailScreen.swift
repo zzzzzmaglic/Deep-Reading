@@ -73,7 +73,7 @@ struct TagDetailScreen: View {
 
     private var assetList: some View {
         ScrollView {
-            LazyVStack(spacing: 8) {
+            LazyVStack(spacing: KnowledgeDetailLayout.tagAssetSpacing) {
                 ForEach(coordinator.assets) { asset in
                     ReadingAssetListRow(
                         asset: asset,
@@ -87,7 +87,7 @@ struct TagDetailScreen: View {
                 }
             }
             .padding(.horizontal, KnowledgeVisualTokens.pageInset)
-            .padding(.top, KnowledgeVisualTokens.progressiveEdgeHeight + 7)
+            .padding(.top, KnowledgeDetailLayout.contentTopInset)
             .padding(.bottom, coordinator.selectedAssetIDs.isEmpty ? 126 : 160)
         }
         .scrollIndicators(.hidden)
@@ -133,7 +133,8 @@ struct TagDetailScreen: View {
                 GlassIconControl(symbol: "square.and.pencil", label: "添加独立型笔记", action: beginStandaloneNote)
                     .accessibilityIdentifier("knowledge-open-standalone-note")
             }
-            .padding(.horizontal, 20)
+            .padding(.leading, 20)
+            .padding(.trailing, KnowledgeDetailLayout.tagChromeTrailingInset)
             .padding(.top, 52)
         }
         .frame(height: KnowledgeVisualTokens.progressiveEdgeHeight)
