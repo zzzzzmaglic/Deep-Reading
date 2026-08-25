@@ -4,6 +4,32 @@
 
 ## 当前交接
 
+### UnionTabView 选中 item 回弹 -> 用户手工验收
+
+- 日期：2026-08-25
+- 上游结论：Tag `1.2.0` 的库主体不会自动给任意自定义 tab item 加缩放回弹；README 的动效示例明确要求调用方在 `Image(systemName:)` 上额外加 `.symbolEffect(.bounce, value: isSelected)`。本项目使用 Figma 导出的普通图片资源，无法从 SF Symbol 专属 effect 获得相同视觉。
+- 本轮修改：在 `KnowledgeGlassTabItem` 对完整的“图标 + 文字”使用 SwiftUI 原生 `keyframeAnimator`：新选中时从 1.00 → 1.10 → 1.00，以 `.bouncy` spring 回弹。选择指示器、外层 Liquid Glass、触摸命中和 Tab 选择逻辑未改。
+- 验证：先以缺少动画策略字段取得 XCTest 编译红灯；实现后 `KnowledgeHomeCoordinatorTests` 在 `Deep Reading · iPhone 16`（iOS 26.5、ARM64）6/6 通过，App 已重新安装并启动。需要用户确认振幅与回弹速度是否接近所见演示。
+- 状态：未提交、未推送；既有 `supabase/.branches/` 与 `supabase/.temp/` 未触碰。
+
+### UnionTabView 单一 selection 事务对齐 -> 用户手工验收
+
+- 日期：2026-08-25
+- 上游对照：已下载并核对 UnionTabView Tag `1.2.0`（提交 `abf9afc364b315d1d058975c6ebbfabde6be06ea`）的完整实现；项目内 `Vendor/UnionTabView/GlassTabBar.swift` 与上游文件 SHA-256 完全相同。上游根 `UnionTabView` 使用同一个同步 `selection` 同时驱动内容与 `GlassTabBar`，没有额外的延迟状态。
+- 本轮修改：删除项目适配层的 `visualSelection`、`selectionCommitTask` 和 240 ms 延迟提交；`KnowledgeGlassTabBar` 现在把唯一的 `$selection` 直接传给 vendored `GlassTabBar`。外层 `.glassEffect(.regular.interactive(), in: .capsule)`、两项尺寸、位置、图标和 UnionTabView 自带交互形变均未修改。
+- 原因：此前一次点击会先更新可视 selection，240 ms 后再切换页面，形成两次独立 SwiftUI 事务和两次玻璃背景重采样；系统交互高光已结束后，第二次页面事务才改变玻璃采样背景，因此观感像“微光延迟恢复”。此次对齐上游的单事务结构，用于验证该集成差异是否就是闪烁来源。
+- 验证：`KnowledgeHomeCoordinatorTests` 在 `Deep Reading · iPhone 16`（iOS 26.5、ARM64）6/6 通过，`git diff --check` 通过；Debug App 已重新安装并启动，当前截图为 `/private/tmp/deep-reading-single-selection.png`。动态微光恢复时序仍需用户在 Simulator 手工连续切换确认。
+- 状态：未提交、未推送；`supabase/.branches/` 与 `supabase/.temp/` 未触碰。
+
+### UnionTabView 固定源码接入 -> 用户手工验收
+
+- 日期：2026-08-25
+- 已完成：不使用 SPM，将 UnionTabView Tag `1.2.0` 对应提交 `abf9afc364b315d1d058975c6ebbfabde6be06ea` 的 `GlassTabBar.swift` 与其直接依赖 `BlurFadeModifier.swift` 原样复制到 `ios_visual_prototype/DeepReadingVisualPrototype/Vendor/UnionTabView/`；两份文件 SHA-256 均与上游一致。App 只声明“首页 / 知识库”两个 `TabItem`，尺寸改用上游默认的单项 86×58 pt、外边距 4 pt，即整体 180×66 pt。后续对照完整上游根容器后，项目已移除曾额外加入的 240 ms 延迟提交，改为单一同步 selection。
+- 关键结论：旧的自定义普通胶囊、matched geometry、拉伸和回弹实现已从 Tab 适配层移除。当前选择态由上游 `UISegmentedControl` 原生 segment 选择动画负责，外层使用 iOS 26 `.glassEffect(.regular.interactive(), in: .capsule)`；图标与文字仍沿用项目资源，选中态为系统蓝。
+- 验证：`KnowledgeHomeCoordinatorTests` 6/6 通过，Xcode 工程 `plutil` 与 `git diff --check` 通过；Debug App 已安装并启动到 `Deep Reading · iPhone 16`（iOS 26.5），当前截图为 `/private/tmp/deep-reading-union-tab.png`，静态画面确认左下角只有两个等宽选项。
+- 待确认项 / 风险：上游 Tag 的 README 声明 MIT，但该 Tag 没有独立 `LICENSE` 文件；来源与此风险已记录在 `Vendor/UnionTabView/ORIGIN.md`，正式商业分发前应再次确认完整许可文本。本轮未提交、未推送，`supabase/.branches/` 与 `supabase/.temp/` 未触碰。
+- 下一步：用户在 Simulator 中亲手切换“首页 / 知识库”，验收原生 segment 选择态的玻璃运动与触感；只根据该手工反馈做局部尺寸、色彩或位置调整。
+
 ### Task 10 知识库 Tab 闪烁与下拉收起态修复 -> 用户手工验收
 
 - 日期：2026-08-24

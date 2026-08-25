@@ -17,14 +17,14 @@ enum KnowledgeVisualTokens {
     static let cardSpacing: CGFloat = 5
     static let coverWidth: CGFloat = 74
     static let coverHeight: CGFloat = 78
-    static let tabBarWidth: CGFloat = 208
-    static let tabBarHeight: CGFloat = 62
-    static let tabBarItemWidth: CGFloat = 102
+    /// UnionTabView 1.2.0 defaults: two 86×58 items plus 4pt outer padding.
+    static let tabBarWidth: CGFloat = 180
+    static let tabBarHeight: CGFloat = 66
+    static let tabBarItemWidth: CGFloat = 86
+    static let tabBarItemHeight: CGFloat = 58
     static let tabBarLeadingInset: CGFloat = 20
     static let tabBarBottomInset: CGFloat = 30
     static let tabBarIconSize: CGFloat = 20
-    static let knowledgeTabSelectedBackgroundOffset: CGFloat = -6
-    static let knowledgeTabSelectedContentOffset: CGFloat = -4
 }
 
 enum KnowledgeHomeHeader: String {
@@ -60,54 +60,33 @@ enum KnowledgeTabBarPolicy {
     static let usesNativeLiquidGlass = true
     static let itemCount = 2
     static let hasMovingSelectionPill = true
-    static let usesSinglePersistentSelectionSurface = true
+    static let usesVendoredUnionTabView = true
+    static let vendoredSourceTag = "1.2.0"
+    static let vendoredSourceRevision = "abf9afc364b315d1d058975c6ebbfabde6be06ea"
+    static let usesNativeSegmentedControlSelection = true
+    static let usesPrivateAPI = false
     static let usesSingleAnimationDriver = true
-    /// The outer bar remains the one Liquid Glass surface. Interaction on that
-    /// surface makes iOS resample the material while the selection moves, which
-    /// reads as a flash when its backdrop changes at the same time.
-    static let containerUsesInteractiveGlass = false
-    /// A moving Liquid Glass element inside another Liquid Glass element causes
-    /// a second material resample. The selection is deliberately a solid,
-    /// persistent capsule instead.
-    static let selectionPillUsesLiquidGlass = false
-    static let selectionPillUsesStableFill = true
-    /// Commit the root-page change after the visible selection pill finishes
-    /// its single motion. This keeps the glass backdrop stable during motion.
-    static let selectionCommitDelayMilliseconds: UInt64 = 240
+    static let usesSingleSynchronousSelectionBinding = true
+    static let usesNativeTabViewContentHost = true
+    static let usesBottomSafeAreaInsetHost = true
+    static let usesOpacitySwitchedFullScreenLayers = false
+    /// UnionTabView documents a bounce as an item-level effect. Our tab icons
+    /// are exported assets rather than SF Symbols, so the equivalent native
+    /// SwiftUI keyframe spring is applied to the complete selected item.
+    static let usesNativeSelectionItemBounce = true
+    static let selectionItemBouncePeakScale: CGFloat = 1.10
     static let selectedContentTintHex: UInt32 = 0x007AFF
     static let selectedContentTint = Color(hex: selectedContentTintHex)
-    /// Preserves Figma's darker selected capsule without sampling the backdrop.
-    static let selectedPillFill = Color(hex: 0xEDEDED)
+    static let selectedGlassTint = Color.gray.opacity(0.15)
 }
 
-enum KnowledgeHomeTitleCollapsePolicy {
-    /// The enclosing content starts below the 59pt status area, so this maps
-    /// to the Figma compact-title top coordinate of y=61.
-    static let compactTitleTopInset: CGFloat = 2
-    /// At this content offset the compact title begins sliding up from below
-    /// the top bar. The large scroll title disappears at this same boundary.
-    static let compactTitleRevealOffset: CGFloat = 35
-    /// Initial large title baseline: 115...159pt. Once scrolled by 51pt, its
-    /// entire 44pt text box is contained by the top edge (ending at 108pt).
-    static let compactTitleFullyVisibleOffset: CGFloat = 51
-    /// The compact title starts below its final baseline and is driven upward
-    /// by the final 16pt of the content scroll, never by a fade animation.
-    static let compactTitleSlideDistance: CGFloat = 18
-
-    static func isCompactTitlePresented(for contentOffset: CGFloat) -> Bool {
-        contentOffset >= compactTitleRevealOffset
-    }
-
-    static func compactTitleVerticalOffset(for contentOffset: CGFloat) -> CGFloat {
-        let span = compactTitleFullyVisibleOffset - compactTitleRevealOffset
-        guard span > 0 else { return 0 }
-        let progress = min(max((contentOffset - compactTitleRevealOffset) / span, 0), 1)
-        return compactTitleSlideDistance * (1 - progress)
-    }
-
-    static func largeTitleOpacity(for contentOffset: CGFloat) -> Double {
-        isCompactTitlePresented(for: contentOffset) ? 0 : 1
-    }
+enum KnowledgeHomeNavigationBarPolicy {
+    /// Match the Files app's native title collapse: the NavigationStack owns
+    /// the large-to-inline transition and the corresponding scroll-edge glass.
+    static let usesSystemLargeTitle = true
+    static let usesSystemScrollEdgeMaterial = true
+    static let usesCustomScrollTitleTracking = false
+    static let usesCustomTopProgressiveEdge = false
 }
 
 enum KnowledgeDetailLayout {

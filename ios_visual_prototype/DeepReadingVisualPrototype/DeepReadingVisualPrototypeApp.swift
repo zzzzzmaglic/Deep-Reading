@@ -112,11 +112,25 @@ enum AppRootRenderedElement: Equatable {
     case button(String)
 }
 
-enum AppTab: Hashable {
-    case home
-    case knowledge
+enum AppTab: String, CaseIterable, Hashable, Sendable, TabItem {
+    case home = "首页"
+    case knowledge = "知识库"
 
     static let defaultSelection = AppTab.knowledge
+
+    var symbol: String {
+        switch self {
+        case .home: return "house.fill"
+        case .knowledge: return "books.vertical.fill"
+        }
+    }
+
+    var actionSymbol: String {
+        switch self {
+        case .home: return "house"
+        case .knowledge: return "books.vertical"
+        }
+    }
 }
 
 enum KnowledgeNavigationDestination: Hashable {
@@ -167,6 +181,7 @@ struct AppRootView: View {
     @State private var runtime: (any AppRuntimeBootstrapping)?
     @State private var selectedTab = AppTab.defaultSelection
     @State private var hidesCustomTabBar = false
+    @State private var tabBarBottomInset: CGFloat = 0
 
     init(
         configurationLoader: @escaping () throws -> SupabaseRuntimeConfiguration = {
@@ -224,24 +239,34 @@ struct AppRootView: View {
                     .task { await bootstrapRuntime() }
             case .ready:
                 if let dependencies = runtime?.knowledgeDependencies {
-                    ZStack(alignment: .bottomLeading) {
+                    TabView(selection: $selectedTab) {
                         HomeUnavailableScreen()
-                            .opacity(selectedTab == .home ? 1 : 0)
-                            .allowsHitTesting(selectedTab == .home)
+                            .tag(AppTab.home)
+                            .toolbarVisibility(.hidden, for: .tabBar)
                         KnowledgeNavigationContainer(
                             dependencies: dependencies,
                             hidesCustomTabBar: $hidesCustomTabBar
                         )
-                        .opacity(selectedTab == .knowledge ? 1 : 0)
-                        .allowsHitTesting(selectedTab == .knowledge)
-
+                        .tag(AppTab.knowledge)
+                        .toolbarVisibility(.hidden, for: .tabBar)
+                    }
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
                         if selectedTab == .home || !hidesCustomTabBar {
                             KnowledgeGlassTabBar(selection: $selectedTab)
+                                .ignoresSafeArea()
                                 .padding(.leading, KnowledgeVisualTokens.tabBarLeadingInset)
-                                .padding(.bottom, KnowledgeVisualTokens.tabBarBottomInset)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(
+                                    .bottom,
+                                    -tabBarBottomInset + KnowledgeVisualTokens.tabBarBottomInset
+                                )
+                                .onGeometryChange(for: CGFloat.self) { proxy in
+                                    proxy.safeAreaInsets.bottom
+                                } action: { value in
+                                    tabBarBottomInset = value
+                                }
                         }
                     }
-                    .ignoresSafeArea(.container, edges: .bottom)
                     .onAppear { renderObserver?(.text("Knowledge runtime ready")) }
                 } else {
                     Text("Knowledge runtime ready")
@@ -285,8 +310,13 @@ struct AppRootView: View {
 
 private struct HomeUnavailableScreen: View {
     var body: some View {
-        ContentUnavailableView("阅读流尚未实现", systemImage: "house")
-            .accessibilityIdentifier("knowledge-home-placeholder")
+        ZStack {
+            KnowledgeVisualTokens.background
+                .ignoresSafeArea()
+
+            ContentUnavailableView("阅读流尚未实现", systemImage: "house")
+                .accessibilityIdentifier("knowledge-home-placeholder")
+        }
     }
 }
 
@@ -383,95 +413,78 @@ private struct KnowledgeNavigationContainer: View {
 
 private struct KnowledgeGlassTabBar: View {
     @Binding var selection: AppTab
-    @State private var visualSelection: AppTab
-    @State private var selectionCommitTask: Task<Void, Never>?
-
-    init(selection: Binding<AppTab>) {
-        _selection = selection
-        _visualSelection = State(initialValue: selection.wrappedValue)
-    }
 
     var body: some View {
-        GlassEffectContainer(spacing: 0) {
-            ZStack(alignment: .leading) {
-                selectionPill
-                HStack(spacing: 0) {
-                    tabButton(tab: .home, title: "首页", image: "KnowledgeTabHome")
-                    tabButton(tab: .knowledge, title: "知识库", image: "KnowledgeTabLibrary")
-                }
-            }
-            .padding(.horizontal, 2)
-            .frame(width: KnowledgeVisualTokens.tabBarWidth, height: KnowledgeVisualTokens.tabBarHeight)
-            // Keep exactly one native Liquid Glass surface. `.interactive()`
-            // adds a press-time material resample, which was visible as a
-            // dark-pill flash when the selected page changed beneath the bar.
-            .glassEffect(.regular, in: Capsule())
+        GlassTabBar(
+            activeTab: $selection,
+            activeTint: KnowledgeTabBarPolicy.selectedContentTint,
+            barTint: KnowledgeTabBarPolicy.selectedGlassTint,
+            itemWidth: KnowledgeVisualTokens.tabBarItemWidth,
+            itemHeight: KnowledgeVisualTokens.tabBarItemHeight
+        ) { tab, isSelected in
+            KnowledgeGlassTabItem(tab: tab, isSelected: isSelected)
         }
+        .frame(width: KnowledgeVisualTokens.tabBarWidth, height: KnowledgeVisualTokens.tabBarHeight)
         .accessibilityIdentifier("knowledge-glass-tab-bar")
-        .onChange(of: selection) { _, newSelection in
-            guard newSelection != visualSelection else { return }
-            selectionCommitTask?.cancel()
-            withAnimation(.smooth(duration: 0.24, extraBounce: 0)) {
-                visualSelection = newSelection
+    }
+}
+
+private struct KnowledgeGlassTabItem: View {
+    let tab: AppTab
+    let isSelected: Bool
+    @State private var selectionBounceTrigger = 0
+
+    var body: some View {
+        VStack(spacing: 1) {
+            Image(tab == .home ? "KnowledgeTabHome" : "KnowledgeTabLibrary")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(
+                    width: KnowledgeVisualTokens.tabBarIconSize,
+                    height: KnowledgeVisualTokens.tabBarIconSize
+                )
+            Text(tab.rawValue)
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(-0.1)
+        }
+        .foregroundStyle(
+            isSelected
+                ? KnowledgeTabBarPolicy.selectedContentTint
+                : Color(hex: 0x1A1A1A)
+        )
+        .frame(
+            width: KnowledgeVisualTokens.tabBarItemWidth,
+            height: KnowledgeVisualTokens.tabBarItemHeight
+        )
+        .keyframeAnimator(
+            initialValue: KnowledgeTabItemBounceValues(),
+            trigger: selectionBounceTrigger
+        ) { content, values in
+            content.scaleEffect(values.scale)
+        } keyframes: { _ in
+            KeyframeTrack(\.scale) {
+                LinearKeyframe(1, duration: 0)
+                SpringKeyframe(
+                    KnowledgeTabBarPolicy.selectionItemBouncePeakScale,
+                    duration: 0.14,
+                    spring: .bouncy
+                )
+                SpringKeyframe(1, duration: 0.28, spring: .bouncy)
             }
         }
-        .onDisappear {
-            selectionCommitTask?.cancel()
+        .onChange(of: isSelected, initial: false) { _, becameSelected in
+            guard becameSelected else { return }
+            selectionBounceTrigger += 1
         }
+        .contentShape(Rectangle())
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("knowledge-tab-\(tab.rawValue)")
+        .accessibilityLabel(tab.rawValue)
     }
+}
 
-    /// The moving selected state is intentionally a stable fill rather than a
-    /// second glass surface. iOS Liquid Glass cannot sample another glass
-    /// element without forcing a second compositing pass while it moves.
-    private var selectionPill: some View {
-        Capsule()
-            .fill(KnowledgeTabBarPolicy.selectedPillFill)
-            .overlay {
-                Capsule()
-                    .stroke(Color.white.opacity(0.45), lineWidth: 1)
-            }
-            .shadow(color: Color.black.opacity(0.04), radius: 1, y: 1)
-            .frame(width: KnowledgeVisualTokens.tabBarItemWidth, height: 54)
-            .offset(x: visualSelection == .home ? 0 : KnowledgeVisualTokens.tabBarItemWidth + KnowledgeVisualTokens.knowledgeTabSelectedBackgroundOffset)
-            .allowsHitTesting(false)
-            .animation(.smooth(duration: 0.24, extraBounce: 0), value: visualSelection)
-    }
-
-    private func tabButton(tab: AppTab, title: String, image: String) -> some View {
-        Button {
-            select(tab)
-        } label: {
-            VStack(spacing: 1) {
-                Image(image)
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: KnowledgeVisualTokens.tabBarIconSize, height: KnowledgeVisualTokens.tabBarIconSize)
-                Text(title)
-                    .font(.system(size: 10, weight: .semibold))
-                    .tracking(-0.1)
-            }
-            .foregroundStyle(visualSelection == tab ? KnowledgeTabBarPolicy.selectedContentTint : Color(hex: 0x1A1A1A))
-            .offset(x: tab == .knowledge ? KnowledgeVisualTokens.knowledgeTabSelectedContentOffset : 0)
-            .frame(width: KnowledgeVisualTokens.tabBarItemWidth, height: 54)
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("knowledge-tab-\(title)")
-        .accessibilityLabel(title)
-    }
-
-    private func select(_ tab: AppTab) {
-        guard tab != visualSelection else { return }
-
-        selectionCommitTask?.cancel()
-        withAnimation(.smooth(duration: 0.24, extraBounce: 0)) {
-            visualSelection = tab
-        }
-        selectionCommitTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: KnowledgeTabBarPolicy.selectionCommitDelayMilliseconds * 1_000_000)
-            guard !Task.isCancelled, visualSelection == tab else { return }
-            selection = tab
-        }
-    }
+private struct KnowledgeTabItemBounceValues {
+    var scale: CGFloat = 1
 }

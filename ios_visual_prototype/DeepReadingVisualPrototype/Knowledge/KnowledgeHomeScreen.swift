@@ -2,29 +2,18 @@ import SwiftUI
 
 struct KnowledgeHomeScreen: View {
     @StateObject private var coordinator: KnowledgeHomeCoordinator
-    @State private var scrollOffset: CGFloat = 0
 
     init(repository: any KnowledgeBaseRepository) {
         _coordinator = StateObject(wrappedValue: KnowledgeHomeCoordinator(repository: repository))
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
+        ZStack {
             KnowledgeVisualTokens.background.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("知识库")
-                        .font(.system(size: KnowledgeVisualTokens.titleSize, weight: .bold))
-                        .foregroundStyle(KnowledgeVisualTokens.primaryText)
-                        .padding(.top, 56)
-                        .padding(.leading, 24)
-                        // The compact title takes over at the beginning of
-                        // its upward slide rather than cross-fading with this
-                        // scroll title beneath the progressive edge.
-                        .opacity(KnowledgeHomeTitleCollapsePolicy.largeTitleOpacity(for: scrollOffset))
-                        .animation(nil, value: KnowledgeHomeTitleCollapsePolicy.isCompactTitlePresented(for: scrollOffset))
                     groupHeader(header: .collections, title: "推文合集", expanded: coordinator.collectionsExpanded, toggle: coordinator.toggleCollections)
-                        .padding(.top, 20)
+                        .padding(.top, 8)
                     KnowledgeGroupList(
                         items: coordinator.visibleCollections,
                         isSystem: \.isSystem,
@@ -48,35 +37,8 @@ struct KnowledgeHomeScreen: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .scrollIndicators(.hidden)
-            // GeometryReader preferences can be coalesced while a scroll view
-            // is decelerating. Use the platform scroll geometry callback so
-            // the compact title follows every real content-offset update.
-            .onScrollGeometryChange(for: CGFloat.self, of: { geometry in
-                // Only actual upward content travel collapses the title. A
-                // magnitude check would also react to an overscroll bounce on
-                // a short, still-loading list and falsely reveal the compact
-                // title while the large title has not moved under the edge.
-                max(0, geometry.contentOffset.y)
-            }, action: { _, offset in
-                scrollOffset = offset
-            })
-
-            knowledgeTopEdge
-            Text("知识库")
-                .font(.system(size: 17, weight: .bold))
-                .foregroundStyle(KnowledgeVisualTokens.primaryText)
-                // The ZStack's content begins beneath the 59pt status-area
-                // safe area. A 2pt local inset therefore places this title at
-                // the Figma y=61 baseline instead of incorrectly at y=120.
-                .padding(.top, KnowledgeHomeTitleCollapsePolicy.compactTitleTopInset)
-                // This is a scroll-driven upward entrance, not a fade. At
-                // the reveal threshold it appears 18pt below final position,
-                // then reaches the title bar as the content moves to 51pt.
-                .offset(y: KnowledgeHomeTitleCollapsePolicy.compactTitleVerticalOffset(for: scrollOffset))
-                .opacity(KnowledgeHomeTitleCollapsePolicy.isCompactTitlePresented(for: scrollOffset) ? 1 : 0)
-                .animation(nil, value: KnowledgeHomeTitleCollapsePolicy.isCompactTitlePresented(for: scrollOffset))
-                .accessibilityHidden(!KnowledgeHomeTitleCollapsePolicy.isCompactTitlePresented(for: scrollOffset))
-                .accessibilityIdentifier("knowledge-home-compact-title")
+            .navigationTitle("知识库")
+            .toolbarTitleDisplayMode(.large)
         }
         .task { await coordinator.load() }
         .overlay(alignment: .bottom) { knowledgeBottomEdge }
@@ -124,16 +86,6 @@ struct KnowledgeHomeScreen: View {
         .padding(.bottom, 3)
         // This header has a stable identity. Only the glyph rotation receives
         // an animation; inserting rows therefore does not redraw the title.
-    }
-
-    @ViewBuilder private var knowledgeTopEdge: some View {
-        #if DEBUG
-        ReaderTopProgressiveBlur(isVisible: true, height: KnowledgeVisualTokens.progressiveEdgeHeight)
-        #else
-        LinearGradient(colors: [KnowledgeVisualTokens.background.opacity(0.55), .clear], startPoint: .top, endPoint: .bottom)
-            .frame(height: KnowledgeVisualTokens.progressiveEdgeHeight)
-            .allowsHitTesting(false)
-        #endif
     }
 
     private var knowledgeBottomEdge: some View {
