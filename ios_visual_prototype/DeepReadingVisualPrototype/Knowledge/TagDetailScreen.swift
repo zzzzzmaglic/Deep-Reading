@@ -29,16 +29,18 @@ struct TagDetailScreen: View {
     let tagID: UUID
     let dependencies: ReaderDependencies
     let dismiss: () -> Void
+    let selectionStateChanged: (Bool) -> Void
     let showInArticle: (ReaderRoute) -> Void
 
     @StateObject private var coordinator: TagDetailCoordinator
     @State private var cardToken = 0
     @State private var presentsSelectionConfirmation = false
 
-    init(tagID: UUID, dependencies: ReaderDependencies, dismiss: @escaping () -> Void = {}, showInArticle: @escaping (ReaderRoute) -> Void = { _ in }) {
+    init(tagID: UUID, dependencies: ReaderDependencies, dismiss: @escaping () -> Void = {}, selectionStateChanged: @escaping (Bool) -> Void = { _ in }, showInArticle: @escaping (ReaderRoute) -> Void = { _ in }) {
         self.tagID = tagID
         self.dependencies = dependencies
         self.dismiss = dismiss
+        self.selectionStateChanged = selectionStateChanged
         self.showInArticle = showInArticle
         _coordinator = StateObject(wrappedValue: TagDetailCoordinator(repository: dependencies.readingAssetRepository))
     }
@@ -65,10 +67,15 @@ struct TagDetailScreen: View {
                 selectionConfirmation
             }
         }
+        .ignoresSafeArea()
         .overlay(alignment: .bottom) { selectionToolbar }
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .task { await coordinator.load(tagID: tagID) }
+        .onChange(of: coordinator.selectedAssetIDs) { _, selection in
+            selectionStateChanged(!selection.isEmpty)
+        }
+        .onDisappear { selectionStateChanged(false) }
     }
 
     private var assetList: some View {

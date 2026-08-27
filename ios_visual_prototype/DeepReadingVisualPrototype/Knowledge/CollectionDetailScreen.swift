@@ -4,12 +4,14 @@ struct CollectionDetailScreen: View {
     @StateObject private var coordinator: CollectionDetailCoordinator
     let collectionID: UUID
     let dismiss: () -> Void
+    let selectionStateChanged: (Bool) -> Void
     let openArticle: (KnowledgeArticlePreview) -> Void
     @State private var displaysRemovalFailure = false
 
-    init(collectionID: UUID, repository: any KnowledgeBaseRepository, dismiss: @escaping () -> Void = {}, openArticle: @escaping (KnowledgeArticlePreview) -> Void = { _ in }) {
+    init(collectionID: UUID, repository: any KnowledgeBaseRepository, dismiss: @escaping () -> Void = {}, selectionStateChanged: @escaping (Bool) -> Void = { _ in }, openArticle: @escaping (KnowledgeArticlePreview) -> Void = { _ in }) {
         self.collectionID = collectionID
         self.dismiss = dismiss
+        self.selectionStateChanged = selectionStateChanged
         self.openArticle = openArticle
         _coordinator = StateObject(wrappedValue: CollectionDetailCoordinator(repository: repository))
     }
@@ -31,28 +33,34 @@ struct CollectionDetailScreen: View {
             detailTopEdge
             detailTopChrome
         }
+        .ignoresSafeArea()
         .overlay(alignment: .bottom) {
             if !coordinator.isLockedCollection, !coordinator.selectedArticleIDs.isEmpty {
-                VStack(spacing: 8) {
-                    if displaysRemovalFailure { Text("移除失败，请重试。").font(.footnote.weight(.medium)) }
-                    Button("移除") {
-                        Task {
-                            let removed = await coordinator.removeSelection()
-                            displaysRemovalFailure = !removed
+                ZStack {
+                    ReaderBottomSoftEdge(isVisible: true)
+                    VStack(spacing: 8) {
+                        if displaysRemovalFailure { Text("移除失败，请重试。").font(.footnote.weight(.medium)) }
+                        Button("移除") {
+                            Task {
+                                let removed = await coordinator.removeSelection()
+                                displaysRemovalFailure = !removed
+                            }
                         }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                        .disabled(coordinator.isRemoving)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
-                    .disabled(coordinator.isRemoving)
                 }
-                .padding(.bottom, 44)
-                .frame(maxWidth: .infinity)
-                .background(LinearGradient(colors: [.clear, KnowledgeVisualTokens.background], startPoint: .top, endPoint: .bottom).frame(height: KnowledgeVisualTokens.progressiveEdgeHeight))
+                .frame(height: KnowledgeVisualTokens.progressiveEdgeHeight)
             }
         }
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .task { await coordinator.load(collectionID: collectionID) }
+        .onChange(of: coordinator.selectedArticleIDs) { _, selection in
+            selectionStateChanged(!selection.isEmpty)
+        }
+        .onDisappear { selectionStateChanged(false) }
     }
 
     private func selectionGesture(for article: KnowledgeArticlePreview) -> some Gesture {

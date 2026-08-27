@@ -200,7 +200,21 @@ struct AppRootView: View {
 
     var body: some View {
         Group {
-            switch screen {
+            #if DEBUG
+            if let variant = TabBarABVariant.from(arguments: ProcessInfo.processInfo.arguments) {
+                TabBarABExperimentRoot(variant: variant)
+            } else {
+                runtimeBody
+            }
+            #else
+            runtimeBody
+            #endif
+        }
+    }
+
+    @ViewBuilder
+    private var runtimeBody: some View {
+        switch screen {
             case let .configurationFailure(configurationError):
                 VStack(spacing: 16) {
                     Text("无法启动阅读服务")
@@ -274,7 +288,6 @@ struct AppRootView: View {
                         .onAppear { renderObserver?(.text("Knowledge runtime ready")) }
                 }
             }
-        }
     }
 
     private func loadConfiguration() {
@@ -325,6 +338,7 @@ private struct KnowledgeNavigationContainer: View {
     @Binding var hidesCustomTabBar: Bool
     @State private var path: [KnowledgeNavigationDestination]
     @State private var readerAssetRefreshRevision = 0
+    @State private var detailSelectionIsActive = false
 
     init(dependencies: KnowledgeDependencies) {
         self._hidesCustomTabBar = .constant(false)
@@ -348,6 +362,7 @@ private struct KnowledgeNavigationContainer: View {
                         collectionID: id,
                         repository: dependencies.knowledgeRepository,
                         dismiss: popCurrentDestination,
+                        selectionStateChanged: { detailSelectionIsActive = $0 },
                         openArticle: { article in
                             path.append(.reader(ReaderRoute(articleID: article.id, anchorID: nil, origin: .knowledge)))
                         }
@@ -357,6 +372,7 @@ private struct KnowledgeNavigationContainer: View {
                         tagID: id,
                         dependencies: dependencies.readerDependencies,
                         dismiss: popCurrentDestination,
+                        selectionStateChanged: { detailSelectionIsActive = $0 },
                         showInArticle: { path.append(.reader($0)) }
                     )
                 case let .reader(route):
@@ -384,11 +400,12 @@ private struct KnowledgeNavigationContainer: View {
             }
             .onAppear(perform: updateCustomTabBarVisibility)
             .onChange(of: path) { _, _ in updateCustomTabBarVisibility() }
+            .onChange(of: detailSelectionIsActive) { _, _ in updateCustomTabBarVisibility() }
         }
     }
 
     private func updateCustomTabBarVisibility() {
-        hidesCustomTabBar = path.contains { destination in
+        hidesCustomTabBar = detailSelectionIsActive || path.contains { destination in
             switch destination {
             case .reader, .summary:
                 true
@@ -415,76 +432,10 @@ private struct KnowledgeGlassTabBar: View {
     @Binding var selection: AppTab
 
     var body: some View {
-        GlassTabBar(
-            activeTab: $selection,
-            activeTint: KnowledgeTabBarPolicy.selectedContentTint,
-            barTint: KnowledgeTabBarPolicy.selectedGlassTint,
-            itemWidth: KnowledgeVisualTokens.tabBarItemWidth,
-            itemHeight: KnowledgeVisualTokens.tabBarItemHeight
-        ) { tab, isSelected in
-            KnowledgeGlassTabItem(tab: tab, isSelected: isSelected)
-        }
+        UIKitKnowledgeGlassTabBar(
+            selection: $selection,
+            accessibilityIdentifier: "knowledge-glass-tab-bar"
+        )
         .frame(width: KnowledgeVisualTokens.tabBarWidth, height: KnowledgeVisualTokens.tabBarHeight)
-        .accessibilityIdentifier("knowledge-glass-tab-bar")
     }
-}
-
-private struct KnowledgeGlassTabItem: View {
-    let tab: AppTab
-    let isSelected: Bool
-    @State private var selectionBounceTrigger = 0
-
-    var body: some View {
-        VStack(spacing: 1) {
-            Image(tab == .home ? "KnowledgeTabHome" : "KnowledgeTabLibrary")
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .frame(
-                    width: KnowledgeVisualTokens.tabBarIconSize,
-                    height: KnowledgeVisualTokens.tabBarIconSize
-                )
-            Text(tab.rawValue)
-                .font(.system(size: 10, weight: .semibold))
-                .tracking(-0.1)
-        }
-        .foregroundStyle(
-            isSelected
-                ? KnowledgeTabBarPolicy.selectedContentTint
-                : Color(hex: 0x1A1A1A)
-        )
-        .frame(
-            width: KnowledgeVisualTokens.tabBarItemWidth,
-            height: KnowledgeVisualTokens.tabBarItemHeight
-        )
-        .keyframeAnimator(
-            initialValue: KnowledgeTabItemBounceValues(),
-            trigger: selectionBounceTrigger
-        ) { content, values in
-            content.scaleEffect(values.scale)
-        } keyframes: { _ in
-            KeyframeTrack(\.scale) {
-                LinearKeyframe(1, duration: 0)
-                SpringKeyframe(
-                    KnowledgeTabBarPolicy.selectionItemBouncePeakScale,
-                    duration: 0.14,
-                    spring: .bouncy
-                )
-                SpringKeyframe(1, duration: 0.28, spring: .bouncy)
-            }
-        }
-        .onChange(of: isSelected, initial: false) { _, becameSelected in
-            guard becameSelected else { return }
-            selectionBounceTrigger += 1
-        }
-        .contentShape(Rectangle())
-        .allowsHitTesting(false)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("knowledge-tab-\(tab.rawValue)")
-        .accessibilityLabel(tab.rawValue)
-    }
-}
-
-private struct KnowledgeTabItemBounceValues {
-    var scale: CGFloat = 1
 }

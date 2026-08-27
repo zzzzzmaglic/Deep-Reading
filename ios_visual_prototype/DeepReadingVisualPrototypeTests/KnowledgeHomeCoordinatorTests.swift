@@ -64,13 +64,16 @@ final class KnowledgeHomeCoordinatorTests: XCTestCase {
         XCTAssertEqual(KnowledgeTabBarPolicy.itemCount, 2)
         XCTAssertTrue(KnowledgeTabBarPolicy.hasMovingSelectionPill)
         XCTAssertEqual(KnowledgeTabBarPolicy.selectedContentTintHex, 0x007AFF)
-        XCTAssertTrue(KnowledgeTabBarPolicy.usesVendoredUnionTabView)
+        XCTAssertFalse(KnowledgeTabBarPolicy.usesVendoredUnionTabView)
+        XCTAssertTrue(KnowledgeTabBarPolicy.retainsVendoredUnionTabViewForAB)
         XCTAssertEqual(KnowledgeTabBarPolicy.vendoredSourceTag, "1.2.0")
         XCTAssertEqual(
             KnowledgeTabBarPolicy.vendoredSourceRevision,
             "abf9afc364b315d1d058975c6ebbfabde6be06ea"
         )
         XCTAssertTrue(KnowledgeTabBarPolicy.usesNativeSegmentedControlSelection)
+        XCTAssertTrue(KnowledgeTabBarPolicy.usesUIKitInteractiveGlassSurface)
+        XCTAssertTrue(KnowledgeTabBarPolicy.placesContentOverlayAboveUIKitSurface)
         XCTAssertFalse(KnowledgeTabBarPolicy.usesPrivateAPI)
         XCTAssertEqual(KnowledgeVisualTokens.tabBarWidth, 180)
         XCTAssertEqual(KnowledgeVisualTokens.tabBarHeight, 66)
@@ -80,7 +83,8 @@ final class KnowledgeHomeCoordinatorTests: XCTestCase {
         XCTAssertTrue(KnowledgeTabBarPolicy.usesNativeTabViewContentHost)
         XCTAssertTrue(KnowledgeTabBarPolicy.usesBottomSafeAreaInsetHost)
         XCTAssertFalse(KnowledgeTabBarPolicy.usesOpacitySwitchedFullScreenLayers)
-        XCTAssertTrue(KnowledgeTabBarPolicy.usesNativeSelectionItemBounce)
+        XCTAssertFalse(KnowledgeTabBarPolicy.usesNativeSelectionItemBounce)
+        XCTAssertTrue(KnowledgeTabBarPolicy.usesUIKitSelectionItemBounce)
         XCTAssertEqual(KnowledgeTabBarPolicy.selectionItemBouncePeakScale, 1.10)
     }
 
@@ -91,8 +95,29 @@ final class KnowledgeHomeCoordinatorTests: XCTestCase {
         XCTAssertFalse(KnowledgeHomeNavigationBarPolicy.usesCustomTopProgressiveEdge)
         XCTAssertTrue(KnowledgeTabBarPolicy.usesSingleAnimationDriver)
         XCTAssertEqual(KnowledgeDetailLayout.contentTopInset, 123)
+        XCTAssertTrue(KnowledgeDetailLayout.usesFullScreenCoordinateSpace)
         XCTAssertEqual(KnowledgeDetailLayout.collectionCardSpacing, 5)
         XCTAssertEqual(KnowledgeDetailLayout.tagAssetSpacing, 8)
+    }
+
+    func testTabBarABVariantRequiresAnExplicitDiagnosticArgument() {
+        XCTAssertEqual(
+            TabBarABVariant.from(arguments: ["-tab-bar-ab-upstream"]),
+            .upstream
+        )
+        XCTAssertEqual(
+            TabBarABVariant.from(arguments: ["-tab-bar-ab-helper"]),
+            .helper
+        )
+        XCTAssertEqual(
+            TabBarABVariant.from(arguments: ["-tab-bar-ab-segmented"]),
+            .segmented
+        )
+        XCTAssertEqual(
+            TabBarABVariant.from(arguments: ["-tab-bar-ab-uikit-interactive"]),
+            .uikitInteractive
+        )
+        XCTAssertNil(TabBarABVariant.from(arguments: []))
     }
 
     func testSeedCoverAssetNamesAreAllExportedKnowledgeCovers() {

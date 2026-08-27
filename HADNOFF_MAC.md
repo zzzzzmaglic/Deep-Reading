@@ -4,6 +4,32 @@
 
 ## 当前交接
 
+### 标签/合集详情页顶部坐标修正 -> 用户手工验收
+
+- 日期：2026-08-26
+- 根因：标签详情与合集详情虽然都使用与文章汇总页相同的 `123 pt` 内容顶部间距，但详情页根视图没有进入全屏坐标系。系统先保留约 59 pt 顶部安全区，再叠加 123 pt，导致顶部控件、标题和第一张卡片整体比汇总页低约一个安全区高度，上方出现多余空白。
+- 修复：`TagDetailScreen` 与 `CollectionDetailScreen` 的根层现与 `ArticleAssetSummaryScreen` 一样使用 `.ignoresSafeArea()`；保留 116 pt 顶部渐进虚化、123 pt 内容起点、卡片高度和底部 Tab Bar 几何不变。两种详情页现在共享同一屏幕坐标基准。
+- 验证：先以缺少 `KnowledgeDetailLayout.usesFullScreenCoordinateSpace` 取得 XCTest 编译红灯；最小实现后聚焦 XCTest 与 ARM64 Debug build 通过，App 已重新安装并以 Mac 本地 Supabase 公共配置启动到 `Deep Reading · iPhone 16`（iOS 26.5）。`git diff --check` 通过；未提交、未推送，`supabase/.branches/` 与 `supabase/.temp/` 未触碰。
+- 下一步：请分别打开一个标签详情和合集详情，确认顶部控件、标题及第一张卡片的起始高度与文章汇总页一致。
+
+### Tab Bar 图文回弹迁入 UIKit -> 用户手工验收
+
+- 日期：2026-08-26
+- 根因：同机 UI 对照确认正式栏的 SwiftUI `keyframeAnimator` 是“选中项图标和文字消失”的直接触发点。启用该修饰符时点击后的选中项不可见；仅绕过该修饰符后，同一 `UIGlassEffect`、`UISegmentedControl`、项目图标和文字保持可见。A/B D 本身没有 UIKit spring，也没有 `keyframeAnimator`；此前关于 D 使用 `UIView` spring 的描述已纠正。
+- 本轮实现：正式 `KnowledgeGlassTabBar` 不再创建 SwiftUI `KnowledgeGlassTabItem`。两个项目图片图标和文字改由同一个 `UIVisualEffectView.contentView` 内的 UIKit `UIImageView + UILabel` 渲染；选中回弹使用 `UIView.animate(...usingSpringWithDamping:)` 对完整 item view 的 `transform` 执行 `1.00 → 1.10 → 1.00`。玻璃外壳、原生 segmented 指示器、180×66 pt 外形、两个 86×58 pt 内容区、左下位置、图标资源、文案和选中蓝色不变。
+- 验证：策略 XCTest 先因缺少 `usesUIKitSelectionItemBounce` 编译红灯，最小实现后聚焦 XCTest 通过；iPhone 16 / iOS 26.5 ARM64 Debug build 通过。真实 UI 测试自动点击“首页”并在 700 ms 后截图，确认选中项蓝色图标和文字仍可见；截图为 `/private/tmp/deep-reading-uikit-spring-attachments.X8RayU/224C5E57-ADDB-44E7-9D82-26BA3DCC6D64.png`。临时诊断 UI 测试已删除。
+- 待确认项：Simulator 已停在点击后的“首页”页面。请连续切换“首页 / 知识库”，验收回弹幅度、速度，以及快速连续切换时图文是否始终可见。本轮未提交、未推送；`supabase/.branches/` 与 `supabase/.temp/` 未触碰、未暂存。
+
+### UIKit interactive Liquid Glass Tab Bar -> 用户手工验收
+
+- 日期：2026-08-26
+- 已完成：D A/B 分支已提升为正式 `KnowledgeGlassTabBar` 的底层实现。新增可复用的 `UIKitInteractiveGlassSegmentedTabBar`：它由 `UIVisualEffectView(effect: UIGlassEffect(style: .regular))` 承载外层玻璃，显式设置 `effect.isInteractive = true`，并以内嵌 `UISegmentedControl` 提供原生选择指示器和触摸追踪。
+- 保持不变：正式栏仍位于左下，外壳精确为 `180×66 pt`，两个内容区仍各为 `86×58 pt`、四周 4 pt 内边距；既有 `KnowledgeGlassTabItem` 仍在 UIKit 层上方渲染，所以图片图标、文字、颜色与 SwiftUI 回弹没有变化。
+- 验证：先为 UIKit interactive 表面策略增加 XCTest，取得 `KnowledgeTabBarPolicy.usesUIKitInteractiveGlassSurface` 缺失的编译红灯；实现后相同测试在 `Deep Reading · iPhone 16`（iOS 26.5，ARM64）通过。正常 Debug App 构建、安装并以本机 Supabase 的公开运行时配置启动成功；截图为 `/private/tmp/deep-reading-formal-uikit-tabbar.png`。`git diff --check` 通过。
+- 后续修复：首次正式接入将图文放在 `UIViewRepresentable` 的 SwiftUI 同级覆盖层；交互中的 `UISegmentedControl` 选中合成层会遮住该同级内容，造成被点击项图标和文字消失。现将同一套既有 SwiftUI 图文以透明 `UIHostingController` 置入 `UIVisualEffectView.contentView`，并在 UIKit 层级中晚于 segmented control 添加；图文保持位于选中指示器上方且不接管点击。对应策略断言先以缺失字段红灯，修复后聚焦 XCTest 通过；最新启动截图为 `/private/tmp/deep-reading-formal-tabbar-uikit-hosted-content.png`。
+- 待确认项 / 风险：请用户在正式 App 的“首页 / 知识库”之间连续切换，确认外层微光释放、分段指示器移动与图标回弹；A/B 启动页仍保留用于后续对照。当前相关改动未提交；`supabase/.branches/` 与 `supabase/.temp/` 未触碰、未暂存。
+- 下一步：仅根据这次手工验收反馈调整 Tab Bar；不扩展其他界面或功能。
+
 ### UnionTabView 选中 item 回弹 -> 用户手工验收
 
 - 日期：2026-08-25
