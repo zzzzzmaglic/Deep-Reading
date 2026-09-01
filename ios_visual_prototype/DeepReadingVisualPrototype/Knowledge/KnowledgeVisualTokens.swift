@@ -24,7 +24,7 @@ enum KnowledgeVisualTokens {
     static let tabBarItemWidth: CGFloat = 88.5
     static let tabBarItemHeight: CGFloat = 54
     static let tabBarLeadingInset: CGFloat = 20
-    static let tabBarBottomInset: CGFloat = 30
+    static let tabBarBottomInset: CGFloat = 20
     static let tabBarIconSize: CGFloat = 22
 }
 
@@ -503,10 +503,16 @@ enum KnowledgeDetailLayout {
     /// Matches the already accepted current-article summary list, leaving the
     /// 116pt chrome clear and beginning content at y=123.
     static let contentTopInset: CGFloat = 123
+    /// Figma 13 starts the collection's first article card at y=116.
+    static let collectionContentTopInset: CGFloat = 116
     static let usesFullScreenCoordinateSpace = true
     static let collectionCardSpacing: CGFloat = 5
     static let tagAssetSpacing: CGFloat = 8
     static let collectionCardContentInset: CGFloat = 13
+    static let collectionCoverCornerRadius: CGFloat = 12
+    /// The title and metadata share this fixed trailing edge.
+    static let collectionTitleTextWidth: CGFloat = 224
+    static let collectionMetadataGroupSpacing: CGFloat = 14
     static let tagChromeTrailingInset: CGFloat = 23
 }
 
@@ -529,5 +535,12 @@ enum CollectionDetailScreenPolicy {
 
     static func attachesSelectionGesture(isLockedCollection: Bool) -> Bool {
         !isLockedCollection
+    }
+}
+
+enum KnowledgeDetailNavigationTitlePolicy {
+    static func title(initialTitle: String, loadedTitle: String?) -> String {
+        guard let loadedTitle, !loadedTitle.isEmpty else { return initialTitle }
+        return loadedTitle
     }
 }

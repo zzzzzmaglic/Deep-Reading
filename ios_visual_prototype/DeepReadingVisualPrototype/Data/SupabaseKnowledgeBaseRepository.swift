@@ -82,6 +82,7 @@ final class SupabaseKnowledgeBaseRepository: KnowledgeBaseRepository, @unchecked
         async let exclusionRows = remote.readRows(from: "collection_article_exclusions")
         async let articleRows = remote.readRows(from: "articles")
         async let assetRows = remote.readRows(from: "reading_assets")
+        async let anchorRows = remote.readRows(from: "asset_anchors")
         async let currentOwnerID = remote.readCurrentOwnerID()
 
         let memberships = try (try await membershipRows).compactMap { row -> (articleID: UUID, position: Int)? in
@@ -102,9 +103,19 @@ final class SupabaseKnowledgeBaseRepository: KnowledgeBaseRepository, @unchecked
             let article = try previewData(from: row)
             return (article.id, article)
         })
-        let assetCounts = try (try await assetRows).reduce(into: [UUID: Int]()) { counts, row in
-            guard let articleID = optionalUUID(in: row, column: "article_id") else { return }
-            counts[articleID, default: 0] += 1
+        var assetIDsByArticleID: [UUID: Set<UUID>] = [:]
+        for row in try await assetRows {
+            guard try requiredUUID(in: row, column: "owner_id", table: "reading_assets") == ownerID,
+                  let articleID = optionalUUID(in: row, column: "article_id")
+            else { continue }
+            let assetID = try requiredUUID(in: row, column: "id", table: "reading_assets")
+            assetIDsByArticleID[articleID, default: []].insert(assetID)
+        }
+        for row in try await anchorRows {
+            guard try requiredUUID(in: row, column: "owner_id", table: "asset_anchors") == ownerID else { continue }
+            let assetID = try requiredUUID(in: row, column: "asset_id", table: "asset_anchors")
+            let articleID = try requiredUUID(in: row, column: "article_id", table: "asset_anchors")
+            assetIDsByArticleID[articleID, default: []].insert(assetID)
         }
 
         return memberships.compactMap { membership in
@@ -116,7 +127,7 @@ final class SupabaseKnowledgeBaseRepository: KnowledgeBaseRepository, @unchecked
                 coverAssetName: article.coverAssetName,
                 cognitiveDimension: article.cognitiveDimension,
                 publishedAt: article.publishedAt,
-                readingAssetCount: assetCounts[article.id, default: 0]
+                readingAssetCount: min(assetIDsByArticleID[article.id, default: []].count, 99)
             )
         }
     }
@@ -179,7 +190,7 @@ final class SupabaseKnowledgeBaseRepository: KnowledgeBaseRepository, @unchecked
 
     private func previewData(from row: [String: Any]) throws -> PreviewData {
         let publishedAtString = try requiredString(in: row, column: "published_at", table: "articles")
-        guard let publishedAt = ISO8601DateFormatter().date(from: publishedAtString) else {
+        guard let publishedAt = publishedDate(from: publishedAtString) else {
             throw SupabaseKnowledgeBaseRepositoryError.invalidRow(table: "articles", column: "published_at")
         }
         return PreviewData(
@@ -190,6 +201,15 @@ final class SupabaseKnowledgeBaseRepository: KnowledgeBaseRepository, @unchecked
             cognitiveDimension: try requiredString(in: row, column: "cognitive_dimension", table: "articles"),
             publishedAt: publishedAt
         )
+    }
+
+    private func publishedDate(from value: String) -> Date? {
+        let standardFormatter = ISO8601DateFormatter()
+        if let date = standardFormatter.date(from: value) { return date }
+
+        let fractionalSecondsFormatter = ISO8601DateFormatter()
+        fractionalSecondsFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractionalSecondsFormatter.date(from: value)
     }
 
     private func tag(from row: [String: Any]) throws -> Tag {

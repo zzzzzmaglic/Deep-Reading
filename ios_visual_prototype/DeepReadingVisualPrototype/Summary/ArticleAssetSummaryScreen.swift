@@ -1,10 +1,10 @@
 import SwiftUI
+import UIKit
 
 struct ArticleAssetSummaryScreen: View {
     let articleID: UUID
     let origin: ReaderOrigin
     let dependencies: ReaderDependencies
-    let dismissToReader: () -> Void
     let showInArticle: (ReaderRoute) -> Void
     let refreshReaderAssets: () -> Void
 
@@ -13,11 +13,10 @@ struct ArticleAssetSummaryScreen: View {
     @State private var cardToken = 0
     @State private var presentsDeleteConfirmation = false
 
-    init(articleID: UUID, origin: ReaderOrigin, dependencies: ReaderDependencies, dismissToReader: @escaping () -> Void, showInArticle: @escaping (ReaderRoute) -> Void, refreshReaderAssets: @escaping () -> Void) {
+    init(articleID: UUID, origin: ReaderOrigin, dependencies: ReaderDependencies, showInArticle: @escaping (ReaderRoute) -> Void, refreshReaderAssets: @escaping () -> Void) {
         self.articleID = articleID
         self.origin = origin
         self.dependencies = dependencies
-        self.dismissToReader = dismissToReader
         self.showInArticle = showInArticle
         self.refreshReaderAssets = refreshReaderAssets
         _coordinator = StateObject(wrappedValue: ArticleAssetSummaryCoordinator(articleID: articleID, origin: origin, articleRepository: dependencies.articleRepository, readingAssetRepository: dependencies.readingAssetRepository))
@@ -35,23 +34,25 @@ struct ArticleAssetSummaryScreen: View {
             } else {
                 summaryList
             }
-            if let viewedAsset {
-                ReadingAssetCard(
-                    draft: AssetDraft(asset: viewedAsset, noteContent: viewedAsset.noteContent, selectedTagIDs: Set(viewedAsset.tags.map(\.id))),
-                    repository: dependencies.readingAssetRepository,
-                    token: cardToken,
-                    originalChromeState: ReaderChromeState(isVisible: true),
-                    close: { _, _ in self.viewedAsset = nil },
-                    onSuccessfulSave: refreshAfterCardMutation,
-                    onSuccessfulDelete: { _ in refreshAfterCardMutation() },
-                    onSuccessfulTagUpdate: refreshAfterCardMutation
-                )
-                .id(cardToken)
-            }
         }
         .ignoresSafeArea()
-        .toolbar(.hidden, for: .navigationBar)
-        .navigationBarBackButtonHidden(true)
+        .navigationTitle("标注与笔记")
+        .toolbarTitleDisplayMode(.inline)
+        .readingAssetCardPresentation(item: assetCardPresentation) { presentation in
+            ReadingAssetCard(
+                draft: presentation.draft,
+                repository: dependencies.readingAssetRepository,
+                token: presentation.token,
+                originalChromeState: presentation.originalChromeState,
+                showsBackdrop: false,
+                close: { _, _ in viewedAsset = nil },
+                onSuccessfulSave: refreshAfterCardMutation,
+                onSuccessfulDelete: { _ in refreshAfterCardMutation() },
+                onSuccessfulTagUpdate: refreshAfterCardMutation
+            )
+            .id(presentation.token)
+            .ignoresSafeArea()
+        }
         .task { try? await coordinator.load() }
         .alert("删除所选阅读资产？", isPresented: $presentsDeleteConfirmation) {
             Button("取消", role: .cancel) {}
@@ -86,10 +87,9 @@ struct ArticleAssetSummaryScreen: View {
                 .padding(.horizontal, 11)
                 .padding(.top, 123)
                 .padding(.bottom, coordinator.selectedAssetIDs.isEmpty ? 24 : 128)
+                .background(SummaryTopScrollEdgeRegistration())
             }
             .scrollIndicators(.hidden)
-            summaryTopProgressiveEdge
-            SummaryTopChrome(back: dismissToReader)
         }
         .overlay(alignment: .bottom) {
             if !coordinator.selectedAssetIDs.isEmpty {
@@ -118,43 +118,33 @@ struct ArticleAssetSummaryScreen: View {
         viewedAsset = asset
     }
 
+    private var assetCardPresentation: Binding<ReadingAssetCardPresentation?> {
+        Binding(
+            get: {
+                guard let viewedAsset else { return nil }
+                return ReadingAssetCardPresentation(
+                    draft: AssetDraft(
+                        asset: viewedAsset,
+                        noteContent: viewedAsset.noteContent,
+                        selectedTagIDs: Set(viewedAsset.tags.map(\.id))
+                    ),
+                    token: cardToken,
+                    originalChromeState: ReaderChromeState(isVisible: true),
+                    initiallyPresentsTags: false
+                )
+            },
+            set: { presentation in
+                if presentation == nil { viewedAsset = nil }
+            }
+        )
+    }
+
     private func refreshAfterCardMutation() {
         viewedAsset = nil
         refreshReaderAssets()
         Task { await coordinator.refreshAfterAssetMutation() }
     }
 
-    @ViewBuilder private var summaryTopProgressiveEdge: some View {
-        #if DEBUG
-        ReaderTopProgressiveBlur(isVisible: true, height: 116)
-        #else
-        LinearGradient(colors: [Color(red: 0.973, green: 0.961, blue: 0.937).opacity(0.52), .clear], startPoint: .top, endPoint: .bottom)
-            .frame(height: 116)
-            .allowsHitTesting(false)
-        #endif
-    }
-}
-
-private struct SummaryTopChrome: View {
-    let back: () -> Void
-
-    var body: some View {
-        ZStack {
-            Text("标注与笔记")
-                .font(.system(size: 17, weight: .bold))
-                .foregroundStyle(Color(red: 0.114, green: 0.114, blue: 0.122))
-                .padding(.top, 61)
-            HStack {
-                GlassIconControl(symbol: "chevron.left", label: "返回", action: back)
-                    .accessibilityIdentifier("summary-back-to-reader")
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 52)
-        }
-        .frame(height: 116)
-        .allowsHitTesting(true)
-    }
 }
 
 private struct SummaryDeletionToolbar: View {
@@ -169,5 +159,81 @@ private struct SummaryDeletionToolbar: View {
             .foregroundStyle(.red)
         }
         .frame(height: 116)
+    }
+}
+
+/// SwiftUI does not always nominate this nested list as the navigation
+/// controller's top-edge scroll view. Register the underlying UIKit scroll
+/// view explicitly so the summary uses the reader's native navigation-bar
+/// material and control placement.
+private struct SummaryTopScrollEdgeRegistration: UIViewRepresentable {
+    func makeUIView(context: Context) -> SummaryTopScrollEdgeRegistrationView {
+        SummaryTopScrollEdgeRegistrationView()
+    }
+
+    func updateUIView(_ uiView: SummaryTopScrollEdgeRegistrationView, context: Context) {
+        uiView.registerTopScrollViewIfNeeded()
+    }
+}
+
+private final class SummaryTopScrollEdgeRegistrationView: UIView {
+    private weak var scrollEdgeOwner: UIViewController?
+    private weak var registeredScrollView: UIScrollView?
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+
+        if window == nil {
+            unregisterTopScrollViewIfNeeded()
+        } else {
+            registerTopScrollViewIfNeeded()
+        }
+    }
+
+    override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        registerTopScrollViewIfNeeded()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        registerTopScrollViewIfNeeded()
+    }
+
+    func registerTopScrollViewIfNeeded() {
+        guard let scrollView = enclosingScrollView,
+              let owner = owningViewController else { return }
+
+        guard scrollEdgeOwner !== owner || registeredScrollView !== scrollView else { return }
+        owner.setContentScrollView(scrollView, for: .top)
+        scrollEdgeOwner = owner
+        registeredScrollView = scrollView
+    }
+
+    private func unregisterTopScrollViewIfNeeded() {
+        if let scrollEdgeOwner,
+           scrollEdgeOwner.contentScrollView(for: .top) === registeredScrollView {
+            scrollEdgeOwner.setContentScrollView(nil, for: .top)
+        }
+        scrollEdgeOwner = nil
+        registeredScrollView = nil
+    }
+
+    private var enclosingScrollView: UIScrollView? {
+        var ancestor = superview
+        while let current = ancestor {
+            if let scrollView = current as? UIScrollView { return scrollView }
+            ancestor = current.superview
+        }
+        return nil
+    }
+
+    private var owningViewController: UIViewController? {
+        var responder: UIResponder? = self
+        while let current = responder {
+            if let controller = current as? UIViewController { return controller }
+            responder = current.next
+        }
+        return nil
     }
 }

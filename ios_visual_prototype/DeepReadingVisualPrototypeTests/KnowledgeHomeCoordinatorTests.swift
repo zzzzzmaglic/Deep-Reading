@@ -42,7 +42,7 @@ final class KnowledgeHomeCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(KnowledgeRelativeDate.displayText(for: date(2026, 8, 23, 0, 1, calendar: calendar), now: now, calendar: calendar), "今天")
         XCTAssertEqual(KnowledgeRelativeDate.displayText(for: date(2026, 8, 22, 23, 59, calendar: calendar), now: now, calendar: calendar), "昨天")
-        XCTAssertEqual(KnowledgeRelativeDate.displayText(for: date(2026, 8, 20, 12, 0, calendar: calendar), now: now, calendar: calendar), "3天前")
+        XCTAssertEqual(KnowledgeRelativeDate.displayText(for: date(2026, 8, 20, 12, 0, calendar: calendar), now: now, calendar: calendar), "三天前")
         XCTAssertEqual(KnowledgeRelativeDate.displayText(for: date(2026, 8, 16, 12, 0, calendar: calendar), now: now, calendar: calendar), "一周前")
         XCTAssertEqual(KnowledgeRelativeDate.displayText(for: date(2026, 1, 1, 12, 0, calendar: calendar), now: now, calendar: calendar), "1月1日")
         XCTAssertEqual(KnowledgeRelativeDate.displayText(for: date(2025, 12, 31, 12, 0, calendar: calendar), now: now, calendar: calendar), "2025年12月31日")
@@ -75,17 +75,18 @@ final class KnowledgeHomeCoordinatorTests: XCTestCase {
         XCTAssertTrue(KnowledgeTabBarPolicy.usesUIKitInteractiveGlassSurface)
         XCTAssertTrue(KnowledgeTabBarPolicy.placesContentOverlayAboveUIKitSurface)
         XCTAssertFalse(KnowledgeTabBarPolicy.usesPrivateAPI)
-        XCTAssertEqual(KnowledgeVisualTokens.tabBarWidth, 180)
-        XCTAssertEqual(KnowledgeVisualTokens.tabBarHeight, 66)
-        XCTAssertEqual(KnowledgeVisualTokens.tabBarItemWidth, 86)
-        XCTAssertEqual(KnowledgeVisualTokens.tabBarItemHeight, 58)
+        XCTAssertEqual(KnowledgeVisualTokens.tabBarWidth, 185)
+        XCTAssertEqual(KnowledgeVisualTokens.tabBarHeight, 62)
+        XCTAssertEqual(KnowledgeVisualTokens.tabBarItemWidth, 88.5)
+        XCTAssertEqual(KnowledgeVisualTokens.tabBarItemHeight, 54)
+        XCTAssertEqual(KnowledgeVisualTokens.tabBarBottomInset, 20)
         XCTAssertTrue(KnowledgeTabBarPolicy.usesSingleSynchronousSelectionBinding)
         XCTAssertTrue(KnowledgeTabBarPolicy.usesNativeTabViewContentHost)
         XCTAssertTrue(KnowledgeTabBarPolicy.usesBottomSafeAreaInsetHost)
         XCTAssertFalse(KnowledgeTabBarPolicy.usesOpacitySwitchedFullScreenLayers)
         XCTAssertFalse(KnowledgeTabBarPolicy.usesNativeSelectionItemBounce)
         XCTAssertTrue(KnowledgeTabBarPolicy.usesUIKitSelectionItemBounce)
-        XCTAssertEqual(KnowledgeTabBarPolicy.selectionItemBouncePeakScale, 1.10)
+        XCTAssertEqual(KnowledgeTabBarPolicy.selectionItemBouncePeakScale, 1.20)
     }
 
     func testKnowledgeHomeUsesTheSystemLargeTitleNavigationChrome() {
@@ -98,6 +99,10 @@ final class KnowledgeHomeCoordinatorTests: XCTestCase {
         XCTAssertTrue(KnowledgeDetailLayout.usesFullScreenCoordinateSpace)
         XCTAssertEqual(KnowledgeDetailLayout.collectionCardSpacing, 5)
         XCTAssertEqual(KnowledgeDetailLayout.tagAssetSpacing, 8)
+    }
+
+    func testCollectionArticleCardKeepsItsTitleAndDateOnOneSharedRightEdge() {
+        XCTAssertEqual(KnowledgeDetailLayout.collectionTitleTextWidth, 224)
     }
 
     func testTabBarABVariantRequiresAnExplicitDiagnosticArgument() {

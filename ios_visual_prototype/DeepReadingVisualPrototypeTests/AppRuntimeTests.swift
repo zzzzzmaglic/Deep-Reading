@@ -6,6 +6,140 @@ import XCTest
 
 @MainActor
 final class AppRuntimeTests: XCTestCase {
+    func testReaderRegistersItsTextViewportForTheSystemTopScrollEdge() async throws {
+        let articleID = UUID()
+        let article = Article(
+            id: articleID,
+            title: "导航栏背景",
+            sourceName: "测试",
+            contentChecksum: "navigation-background",
+            blocks: [
+                ArticleBlock(
+                    id: UUID(),
+                    articleID: articleID,
+                    position: 0,
+                    content: "阅读器显示顶部控件时，系统导航栏必须绘制标准背景材质。",
+                    kind: .paragraph
+                )
+            ]
+        )
+        let screen = NavigationStack {
+            ReaderScreen(
+                route: ReaderRoute(articleID: articleID, anchorID: nil, origin: .feed),
+                dependencies: ReaderDependencies(
+                    articleRepository: ReaderScreenFixtureArticleRepository(article: article),
+                    readingAssetRepository: ReaderScreenFixtureAssetRepository()
+                )
+            )
+        }
+        let controller = UIHostingController(rootView: screen)
+        let window = try makeWindow(rootViewController: controller)
+        defer { window.isHidden = true }
+
+        controller.loadViewIfNeeded()
+        try await Task.sleep(for: .milliseconds(200))
+        window.layoutIfNeeded()
+        controller.view.layoutIfNeeded()
+
+        let textView = try await waitForTextView(in: controller.view)
+        let owner = try XCTUnwrap(owningViewController(of: textView))
+
+        XCTAssertTrue(
+            owner.contentScrollView(for: .top) === textView,
+            "The reader must explicitly register its UIViewRepresentable text viewport so UIKit can produce the native top scroll-edge blur."
+        )
+    }
+
+    func testSummaryRegistersItsListScrollViewForTheSystemTopScrollEdge() async throws {
+        let articleID = UUID()
+        let article = Article(
+            id: articleID,
+            title: "汇总页导航栏背景",
+            sourceName: "测试",
+            contentChecksum: "summary-navigation-background",
+            blocks: [
+                ArticleBlock(
+                    id: UUID(),
+                    articleID: articleID,
+                    position: 0,
+                    content: "汇总页列表必须驱动系统顶部导航栏的滚动边缘状态。",
+                    kind: .paragraph
+                )
+            ]
+        )
+        let assets = (0 ..< 6).map { index in
+            ReadingAsset(
+                articleID: articleID,
+                anchor: nil,
+                noteContent: "第 \(index + 1) 条独立笔记，用于生成可滚动的汇总列表。"
+            )
+        }
+        let screen = NavigationStack {
+            ArticleAssetSummaryScreen(
+                articleID: articleID,
+                origin: .feed,
+                dependencies: ReaderDependencies(
+                    articleRepository: ReaderScreenFixtureArticleRepository(article: article),
+                    readingAssetRepository: ReaderScreenFixtureAssetRepository(assets: assets)
+                ),
+                showInArticle: { _ in },
+                refreshReaderAssets: {}
+            )
+        }
+        let controller = UIHostingController(rootView: screen)
+        let window = try makeWindow(rootViewController: controller)
+        defer { window.isHidden = true }
+
+        controller.loadViewIfNeeded()
+        let scrollView = try await waitForScrollableView(in: controller.view)
+        let owner = try XCTUnwrap(owningViewController(of: scrollView))
+
+        XCTAssertTrue(
+            owner.contentScrollView(for: .top) === scrollView,
+            "The summary list must explicitly register its scroll view so the system navigation bar uses the same top scroll-edge layout as the reader."
+        )
+    }
+
+    func testReaderShowsDailyTweetAsItsSystemNavigationTitle() async throws {
+        let articleID = UUID()
+        let article = Article(
+            id: articleID,
+            title: "这不是导航标题",
+            sourceName: "测试",
+            contentChecksum: "reader-navigation-title",
+            blocks: [
+                ArticleBlock(
+                    id: UUID(),
+                    articleID: articleID,
+                    position: 0,
+                    content: "阅读器需要真实的居中系统导航标题。",
+                    kind: .paragraph
+                )
+            ]
+        )
+        let screen = NavigationStack {
+            ReaderScreen(
+                route: ReaderRoute(articleID: articleID, anchorID: nil, origin: .feed),
+                dependencies: ReaderDependencies(
+                    articleRepository: ReaderScreenFixtureArticleRepository(article: article),
+                    readingAssetRepository: ReaderScreenFixtureAssetRepository()
+                )
+            )
+        }
+        let controller = UIHostingController(rootView: screen)
+        let window = try makeWindow(rootViewController: controller)
+        defer { window.isHidden = true }
+
+        controller.loadViewIfNeeded()
+        let titleLabel = try await waitForLabel(text: "每日推文", in: controller.view)
+
+        XCTAssertEqual(titleLabel.text, "每日推文")
+        XCTAssertNotNil(
+            owningNavigationBar(of: titleLabel),
+            "The reader title must be rendered by the system navigation bar rather than by an in-content overlay."
+        )
+    }
+
     func testAppRootBootstrapsInjectedRuntimeAndRendersReadyState() async throws {
         let runtime = FakeRuntime()
         let recorder = AppRuntimeRenderRecorder()
@@ -310,12 +444,65 @@ final class AppRuntimeTests: XCTestCase {
         return nil
     }
 
+    private func findLabel(text: String, in view: UIView) -> UILabel? {
+        if let label = view as? UILabel, label.text == text { return label }
+        for subview in view.subviews {
+            if let label = findLabel(text: text, in: subview) { return label }
+        }
+        return nil
+    }
+
+    private func findScrollableView(in view: UIView) -> UIScrollView? {
+        if let scrollView = view as? UIScrollView,
+           scrollView.contentSize.height > scrollView.bounds.height {
+            return scrollView
+        }
+        for subview in view.subviews {
+            if let scrollView = findScrollableView(in: subview) { return scrollView }
+        }
+        return nil
+    }
+
+    private func owningNavigationBar(of view: UIView) -> UINavigationBar? {
+        var ancestor = view.superview
+        while let current = ancestor {
+            if let navigationBar = current as? UINavigationBar { return navigationBar }
+            ancestor = current.superview
+        }
+        return nil
+    }
+
+    private func owningViewController(of view: UIView) -> UIViewController? {
+        var responder: UIResponder? = view
+        while let current = responder {
+            if let controller = current as? UIViewController { return controller }
+            responder = current.next
+        }
+        return nil
+    }
+
     private func waitForTextView(in view: UIView) async throws -> UITextView {
         for _ in 0 ..< 50 {
             if let textView = findTextView(in: view) { return textView }
             try await Task.sleep(for: .milliseconds(20))
         }
         return try XCTUnwrap(findTextView(in: view))
+    }
+
+    private func waitForLabel(text: String, in view: UIView) async throws -> UILabel {
+        for _ in 0 ..< 50 {
+            if let label = findLabel(text: text, in: view) { return label }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        return try XCTUnwrap(findLabel(text: text, in: view))
+    }
+
+    private func waitForScrollableView(in view: UIView) async throws -> UIScrollView {
+        for _ in 0 ..< 50 {
+            if let scrollView = findScrollableView(in: view) { return scrollView }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        return try XCTUnwrap(findScrollableView(in: view))
     }
 
     private func waitForTextView(

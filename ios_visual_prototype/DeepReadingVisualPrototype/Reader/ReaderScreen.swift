@@ -7,7 +7,6 @@ struct ReaderScreen: View {
     let route: ReaderRoute
     let dependencies: ReaderDependencies
     let onOpenSummary: (ReaderRoute) -> Void
-    let onBack: (ReaderOrigin) -> Void
     let assetRefreshRevision: Int
 
     @StateObject private var coordinator: ReaderCoordinator
@@ -21,13 +20,11 @@ struct ReaderScreen: View {
         route: ReaderRoute,
         dependencies: ReaderDependencies,
         onOpenSummary: @escaping (ReaderRoute) -> Void = { _ in },
-        onBack: @escaping (ReaderOrigin) -> Void = { _ in },
         assetRefreshRevision: Int = 0
     ) {
         self.route = route
         self.dependencies = dependencies
         self.onOpenSummary = onOpenSummary
-        self.onBack = onBack
         self.assetRefreshRevision = assetRefreshRevision
         _coordinator = StateObject(wrappedValue: ReaderCoordinator(dependencies: dependencies))
     }
@@ -65,9 +62,53 @@ struct ReaderScreen: View {
             }
         }
         .statusBarHidden(!coordinator.chromeIsVisible)
-        .toolbar(.hidden, for: .navigationBar)
-        .navigationBarBackButtonHidden(true)
+        .navigationTitle("每日推文")
+        .toolbarTitleDisplayMode(.inline)
+        .toolbar(coordinator.chromeIsVisible ? .visible : .hidden, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    onOpenSummary(route)
+                } label: {
+                    Image(systemName: "doc.text.magnifyingglass")
+                }
+                .disabled(!coordinator.uiTestHighlightSeedIsReady)
+                .accessibilityLabel("标注与笔记")
+                .accessibilityIdentifier("reader-open-summary")
+            }
+        }
         .preferredColorScheme(.light)
+        .readingAssetCardPresentation(item: assetCardPresentation) { presentation in
+            ReadingAssetCard(
+                draft: presentation.draft,
+                repository: dependencies.readingAssetRepository,
+                token: presentation.token,
+                originalChromeState: presentation.originalChromeState,
+                initiallyPresentsTags: presentation.initiallyPresentsTags,
+                showsBackdrop: false,
+                close: { token, chromeState in
+                    coordinator.dismissAssetCard(token: token, restoring: chromeState)
+                },
+                onSuccessfulSave: {
+                    coordinator.completeAssetCardSave(
+                        token: presentation.token,
+                        restoring: presentation.originalChromeState
+                    )
+                },
+                onSuccessfulDelete: { assetID in
+                    coordinator.completeAssetCardDelete(
+                        assetID,
+                        token: presentation.token,
+                        restoring: presentation.originalChromeState
+                    )
+                },
+                onSuccessfulTagUpdate: {
+                    coordinator.completeAssetCardTagUpdate(token: presentation.token)
+                }
+            )
+            .id(presentation.token)
+            .ignoresSafeArea()
+        }
         .task(id: assetRefreshRevision) {
             guard assetRefreshRevision > 0 else { return }
             await coordinator.refreshAssets()
@@ -129,23 +170,9 @@ struct ReaderScreen: View {
             scrollRequestRevision: coordinator.scrollRequestRevision
         ))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // The approved reader geometry is expressed against the full
-        // 393 × 852 iPhone 16 canvas, not the post-status-bar safe area.
-        // This mirrors the prior visual prototype and keeps the fixed chrome
-        // at top y=52 / bottom y=780 rather than pulling it toward center.
+        // Keep the text viewport and bottom controls on the full-screen reader
+        // canvas. The system navigation bar owns the top chrome and its inset.
         .ignoresSafeArea()
-        .overlay(alignment: .top) {
-            topProgressiveEdge
-        }
-        .overlay(alignment: .top) {
-            ReaderTopGlassControls(
-                onBack: { onBack(route.origin) },
-                onOpenSummary: { onOpenSummary(route) },
-                isSummaryEnabled: coordinator.uiTestHighlightSeedIsReady
-            )
-                .opacity(coordinator.chromeIsVisible ? 1 : 0)
-                .allowsHitTesting(coordinator.chromeIsVisible)
-        }
         .overlay(alignment: .bottom) {
             ReaderBottomSoftEdge(isVisible: coordinator.chromeIsVisible)
         }
@@ -194,50 +221,31 @@ struct ReaderScreen: View {
                 )
             }
         }
-        .overlay {
-            if let draft = coordinator.presentedAssetDraft,
-               let chromeState = coordinator.assetCardChromeState,
-               let token = coordinator.assetCardToken {
-                ReadingAssetCard(
-                    draft: draft,
-                    repository: dependencies.readingAssetRepository,
-                    token: token,
-                    originalChromeState: chromeState,
-                    initiallyPresentsTags: coordinator.assetCardPresentsTags,
-                    close: { token, chromeState in
-                        coordinator.dismissAssetCard(token: token, restoring: chromeState)
-                    },
-                    onSuccessfulSave: {
-                        coordinator.completeAssetCardSave(token: token, restoring: chromeState)
-                    },
-                    onSuccessfulDelete: { assetID in
-                        coordinator.completeAssetCardDelete(assetID, token: token, restoring: chromeState)
-                    },
-                    onSuccessfulTagUpdate: {
-                        coordinator.completeAssetCardTagUpdate(token: token)
-                    }
-                )
-                .id(token)
-            }
-        }
         .animation(.easeInOut(duration: 0.22), value: coordinator.chromeIsVisible)
     }
 
-    @ViewBuilder
-    private var topProgressiveEdge: some View {
-        #if DEBUG
-        ReaderTopProgressiveBlur(isVisible: coordinator.chromeIsVisible)
-        #else
-        LinearGradient(
-            colors: [Color(uiColor: .systemBackground).opacity(0.52), .clear],
-            startPoint: .top,
-            endPoint: .bottom
+    private var assetCardPresentation: Binding<ReadingAssetCardPresentation?> {
+        Binding(
+            get: {
+                guard let draft = coordinator.presentedAssetDraft,
+                      let chromeState = coordinator.assetCardChromeState,
+                      let token = coordinator.assetCardToken else { return nil }
+                return ReadingAssetCardPresentation(
+                    draft: draft,
+                    token: token,
+                    originalChromeState: chromeState,
+                    initiallyPresentsTags: coordinator.assetCardPresentsTags
+                )
+            },
+            set: { presentation in
+                guard presentation == nil,
+                      let token = coordinator.assetCardToken,
+                      let chromeState = coordinator.assetCardChromeState else { return }
+                coordinator.dismissAssetCard(token: token, restoring: chromeState)
+            }
         )
-        .frame(height: 148)
-        .allowsHitTesting(false)
-        .opacity(coordinator.chromeIsVisible ? 1 : 0)
-        #endif
     }
+
 }
 
 extension ReaderRoute {

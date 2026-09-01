@@ -27,8 +27,8 @@ struct TagDetailSelectionConfirmation {
 
 struct TagDetailScreen: View {
     let tagID: UUID
+    let initialTitle: String
     let dependencies: ReaderDependencies
-    let dismiss: () -> Void
     let selectionStateChanged: (Bool) -> Void
     let showInArticle: (ReaderRoute) -> Void
 
@@ -36,10 +36,10 @@ struct TagDetailScreen: View {
     @State private var cardToken = 0
     @State private var presentsSelectionConfirmation = false
 
-    init(tagID: UUID, dependencies: ReaderDependencies, dismiss: @escaping () -> Void = {}, selectionStateChanged: @escaping (Bool) -> Void = { _ in }, showInArticle: @escaping (ReaderRoute) -> Void = { _ in }) {
+    init(tagID: UUID, initialTitle: String, dependencies: ReaderDependencies, selectionStateChanged: @escaping (Bool) -> Void = { _ in }, showInArticle: @escaping (ReaderRoute) -> Void = { _ in }) {
         self.tagID = tagID
+        self.initialTitle = initialTitle
         self.dependencies = dependencies
-        self.dismiss = dismiss
         self.selectionStateChanged = selectionStateChanged
         self.showInArticle = showInArticle
         _coordinator = StateObject(wrappedValue: TagDetailCoordinator(repository: dependencies.readingAssetRepository))
@@ -49,28 +49,43 @@ struct TagDetailScreen: View {
         ZStack(alignment: .top) {
             KnowledgeVisualTokens.background.ignoresSafeArea()
             assetList
-            detailTopEdge
-            detailTopChrome
-            if let draft = coordinator.presentedDraft {
-                ReadingAssetCard(
-                    draft: draft, repository: dependencies.readingAssetRepository, token: cardToken,
-                    originalChromeState: ReaderChromeState(isVisible: true),
-                    close: { _, _ in coordinator.dismissPresentedDraft() },
-                    onSuccessfulSave: refreshAfterCardMutation,
-                    onSuccessfulDelete: { _ in refreshAfterCardMutation() },
-                    onSuccessfulTagUpdate: refreshAfterCardMutation
-                )
-                .id(cardToken)
-            }
-
             if presentsSelectionConfirmation {
                 selectionConfirmation
             }
         }
         .ignoresSafeArea()
         .overlay(alignment: .bottom) { selectionToolbar }
-        .toolbar(.hidden, for: .navigationBar)
-        .navigationBarBackButtonHidden(true)
+        .navigationTitle(
+            KnowledgeDetailNavigationTitlePolicy.title(
+                initialTitle: initialTitle,
+                loadedTitle: coordinator.tag?.name
+            )
+        )
+        .toolbarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(action: beginStandaloneNote) {
+                    Image(systemName: "square.and.pencil")
+                }
+                .accessibilityLabel("添加独立型笔记")
+                .accessibilityIdentifier("knowledge-system-open-standalone-note")
+            }
+        }
+        .readingAssetCardPresentation(item: assetCardPresentation) { presentation in
+            ReadingAssetCard(
+                draft: presentation.draft,
+                repository: dependencies.readingAssetRepository,
+                token: presentation.token,
+                originalChromeState: presentation.originalChromeState,
+                showsBackdrop: false,
+                close: { _, _ in coordinator.dismissPresentedDraft() },
+                onSuccessfulSave: refreshAfterCardMutation,
+                onSuccessfulDelete: { _ in refreshAfterCardMutation() },
+                onSuccessfulTagUpdate: refreshAfterCardMutation
+            )
+            .id(presentation.token)
+            .ignoresSafeArea()
+        }
         .task { await coordinator.load(tagID: tagID) }
         .onChange(of: coordinator.selectedAssetIDs) { _, selection in
             selectionStateChanged(!selection.isEmpty)
@@ -98,6 +113,7 @@ struct TagDetailScreen: View {
             .padding(.bottom, coordinator.selectedAssetIDs.isEmpty ? 126 : 160)
         }
         .scrollIndicators(.hidden)
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
     }
 
     @ViewBuilder private var selectionToolbar: some View {
@@ -127,35 +143,6 @@ struct TagDetailScreen: View {
         )
     }
 
-    private var detailTopChrome: some View {
-        ZStack {
-            Text(coordinator.tag?.name ?? "标签")
-                .font(.system(size: 17, weight: .bold))
-                .foregroundStyle(KnowledgeVisualTokens.primaryText)
-                .accessibilityIdentifier("knowledge-tag-detail-\(tagID.uuidString)")
-                .padding(.top, 61)
-            HStack {
-                GlassIconControl(symbol: "chevron.left", label: "返回", action: dismiss)
-                Spacer()
-                GlassIconControl(symbol: "square.and.pencil", label: "添加独立型笔记", action: beginStandaloneNote)
-                    .accessibilityIdentifier("knowledge-open-standalone-note")
-            }
-            .padding(.leading, 20)
-            .padding(.trailing, KnowledgeDetailLayout.tagChromeTrailingInset)
-            .padding(.top, 52)
-        }
-        .frame(height: KnowledgeVisualTokens.progressiveEdgeHeight)
-    }
-
-    @ViewBuilder private var detailTopEdge: some View {
-        #if DEBUG
-        ReaderTopProgressiveBlur(isVisible: true, height: KnowledgeVisualTokens.progressiveEdgeHeight)
-        #else
-        LinearGradient(colors: [KnowledgeVisualTokens.background.opacity(0.55), .clear], startPoint: .top, endPoint: .bottom)
-            .frame(height: KnowledgeVisualTokens.progressiveEdgeHeight)
-        #endif
-    }
-
     private var selectionToolbarTitle: String { coordinator.selectionAction == .deleteAssets ? "删除" : "移除" }
 
     private func selectionGesture(for asset: ReadingAsset) -> some Gesture {
@@ -174,6 +161,23 @@ struct TagDetailScreen: View {
     private func beginStandaloneNote() {
         cardToken += 1
         coordinator.beginStandaloneNote()
+    }
+
+    private var assetCardPresentation: Binding<ReadingAssetCardPresentation?> {
+        Binding(
+            get: {
+                guard let draft = coordinator.presentedDraft else { return nil }
+                return ReadingAssetCardPresentation(
+                    draft: draft,
+                    token: cardToken,
+                    originalChromeState: ReaderChromeState(isVisible: true),
+                    initiallyPresentsTags: false
+                )
+            },
+            set: { presentation in
+                if presentation == nil { coordinator.dismissPresentedDraft() }
+            }
+        )
     }
 
     private func confirmSelection() {

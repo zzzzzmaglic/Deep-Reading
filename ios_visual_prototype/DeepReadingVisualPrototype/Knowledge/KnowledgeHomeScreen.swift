@@ -20,7 +20,7 @@ struct KnowledgeHomeScreen: View {
                         title: \.name,
                         itemCount: { $0.visibleArticleCount },
                         accessibilityIdentifier: { KnowledgeAccessibilityIdentifier.collection($0.id) },
-                        destination: { .collection($0.id) }
+                        destination: { .collection(id: $0.id, title: $0.name) }
                     )
                     groupHeader(header: .tags, title: "标签", expanded: coordinator.tagsExpanded, toggle: coordinator.toggleTags)
                         .padding(.top, 24)
@@ -30,18 +30,18 @@ struct KnowledgeHomeScreen: View {
                         title: \.name,
                         itemCount: { coordinator.tagAssetCounts[$0.id, default: 0] },
                         accessibilityIdentifier: { KnowledgeAccessibilityIdentifier.tag($0.id) },
-                        destination: { .tag($0.id) }
+                        destination: { .tag(id: $0.id, title: $0.name) }
                     )
                     Spacer(minLength: 128)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .scrollIndicators(.hidden)
+            .scrollEdgeEffectStyle(.soft, for: .bottom)
             .navigationTitle("知识库")
             .toolbarTitleDisplayMode(.large)
         }
         .task { await coordinator.load() }
-        .overlay(alignment: .bottom) { knowledgeBottomEdge }
     }
 
     private func groupHeader(header: KnowledgeHomeHeader, title: String, expanded: Bool, toggle: @escaping () -> Void) -> some View {
@@ -88,11 +88,6 @@ struct KnowledgeHomeScreen: View {
         // an animation; inserting rows therefore does not redraw the title.
     }
 
-    private var knowledgeBottomEdge: some View {
-        LinearGradient(colors: [.clear, KnowledgeVisualTokens.background.opacity(0.55)], startPoint: .top, endPoint: .bottom)
-            .frame(height: KnowledgeVisualTokens.progressiveEdgeHeight)
-            .allowsHitTesting(false)
-    }
 }
 
 private struct KnowledgeGroupList<Item: Identifiable>: View {
@@ -149,7 +144,9 @@ enum KnowledgeRelativeDate {
         switch dayDelta {
         case ...0: return "今天"
         case 1: return "昨天"
-        case 2...6: return "\(dayDelta)天前"
+        case 2...6:
+            let chineseNumerals = [2: "两", 3: "三", 4: "四", 5: "五", 6: "六"]
+            return "\(chineseNumerals[dayDelta] ?? "\(dayDelta)")天前"
         case 7...13: return "一周前"
         default:
             let year = calendar.component(.year, from: date)

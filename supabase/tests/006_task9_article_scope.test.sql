@@ -38,7 +38,7 @@ select set_config(
   'test.other_note_id',
   public.create_standalone_note_with_tags(
     'Other article note',
-    '10000000-0000-0000-0000-000000000002',
+    '10000000-0000-0000-0000-000000000004',
     '{}'::uuid[]
   )::text,
   true
@@ -64,7 +64,7 @@ select is(
   'current article scope excludes global and other-article standalone notes'
 );
 select is(
-  (select count(*) from public.reading_assets asset where asset.article_id = '10000000-0000-0000-0000-000000000002'),
+  (select count(*) from public.reading_assets asset where asset.article_id = '10000000-0000-0000-0000-000000000004'),
   1::bigint,
   'other article standalone notes remain assigned to their own article'
 );

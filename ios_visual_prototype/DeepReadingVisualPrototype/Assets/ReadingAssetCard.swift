@@ -75,16 +75,34 @@ struct ReadingAssetCardContentLayout: Equatable {
     }
 }
 
+/// A stable snapshot for UIKit's item-driven card presentation. Keeping the
+/// draft and token in the item lets the presented host retain the card during
+/// its dismissal transition even after the source coordinator clears state.
+struct ReadingAssetCardPresentation: Identifiable {
+    let draft: AssetDraft
+    let token: Int
+    let originalChromeState: ReaderChromeState
+    let initiallyPresentsTags: Bool
+
+    var id: Int { token }
+}
+
 struct ReadingAssetCard: View {
+    private enum Confirmation: Equatable {
+        case delete
+        case discard
+    }
+
     let token: Int
     let originalChromeState: ReaderChromeState
     let close: (Int, ReaderChromeState) -> Void
+    let showsBackdrop: Bool
 
     @StateObject private var controller: AssetDraftController
     @State private var isEditing: Bool
     @State private var presentsTags = false
-    @State private var presentsDeleteConfirmation = false
-    @State private var presentsDiscardConfirmation = false
+    @State private var presentedConfirmation: Confirmation?
+    @State private var confirmationPreservesKeyboard = false
     @State private var errorMessage: String?
     @State private var keyboardHeight: CGFloat = 0
     @State private var noteFocusRequest = 0
@@ -126,6 +144,7 @@ struct ReadingAssetCard: View {
         token: Int,
         originalChromeState: ReaderChromeState,
         initiallyPresentsTags: Bool = false,
+        showsBackdrop: Bool = true,
         close: @escaping (Int, ReaderChromeState) -> Void,
         onSuccessfulSave: @escaping () -> Void,
         onSuccessfulDelete: @escaping (UUID) -> Void,
@@ -134,6 +153,7 @@ struct ReadingAssetCard: View {
         self.token = token
         self.originalChromeState = originalChromeState
         self.close = close
+        self.showsBackdrop = showsBackdrop
         _isEditing = State(initialValue: draft.asset == nil)
         _presentsTags = State(initialValue: initiallyPresentsTags)
         _controller = StateObject(wrappedValue: AssetDraftController(
@@ -148,25 +168,14 @@ struct ReadingAssetCard: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.16)
+            (showsBackdrop ? Color.black.opacity(0.16) : Color.clear)
                 .ignoresSafeArea()
+                .contentShape(Rectangle())
                 .accessibilityIdentifier("reading-asset-card")
                 .onTapGesture {
                     guard !controller.isMutationInFlight else { return }
                     requestClose()
                 }
-
-            Button(action: requestClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .bold))
-                    .frame(width: 44, height: 44)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("关闭标注卡片")
-            .accessibilityIdentifier("asset-card-dismiss")
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-            .padding(.trailing, 24)
-            .padding(.top, 84)
 
             card
                 .padding(.horizontal, 24)
@@ -187,6 +196,11 @@ struct ReadingAssetCard: View {
                 )
             }
 
+            if let presentedConfirmation {
+                confirmationOverlay(presentedConfirmation)
+                    .zIndex(20)
+            }
+
         }
         .task { await controller.loadAvailableTags(ensuring: debugDemoTagNames) }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
@@ -195,24 +209,9 @@ struct ReadingAssetCard: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             keyboardHeight = 0
-        }
-        .alert("确认删除该阅读资产？", isPresented: $presentsDeleteConfirmation) {
-            Button("取消", role: .cancel) {}
-            Button("删除", role: .destructive, action: deleteAsset)
-                .accessibilityIdentifier("asset-delete-confirm")
-        } message: {
-            Text("删除后将无法恢复。")
-        }
-        .alert("放弃本次编辑？", isPresented: $presentsDiscardConfirmation) {
-            Button("继续编辑", role: .cancel) {}
-            Button("放弃编辑", role: .destructive) {
-                guard !controller.isMutationInFlight else { return }
-                controller.discard()
-                close(token, originalChromeState)
+            if presentedConfirmation != nil, confirmationPreservesKeyboard {
+                restoreEditorFocusAfterConfirmationIfNeeded()
             }
-            .accessibilityIdentifier("asset-discard-confirm")
-        } message: {
-            Text("未保存的笔记内容将不会被保留。")
         }
     }
 
@@ -324,6 +323,7 @@ struct ReadingAssetCard: View {
                 Image(systemName: "trash")
                     .frame(width: 44, height: 44)
             }
+            .accessibilityIdentifier("asset-delete")
             .offset(x: 64, y: actionRowY)
 
             Button(action: saveOrBeginEditing) {
@@ -342,6 +342,84 @@ struct ReadingAssetCard: View {
         .animation(.easeOut(duration: 0.22), value: cardVerticalOffset)
     }
 
+    private func confirmationOverlay(_ confirmation: Confirmation) -> some View {
+        GeometryReader { proxy in
+            let panelHeight: CGFloat = 202
+            let availableHeight = max(panelHeight, proxy.size.height - keyboardHeight)
+            let panelCenterY = keyboardHeight > 0
+                ? max(panelHeight / 2 + 16, availableHeight - panelHeight / 2 - 16)
+                : proxy.size.height / 2
+
+            ZStack {
+                Color.black.opacity(0.28)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture {}
+
+                VStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(confirmation == .delete
+                            ? "确认删除该阅读资产？"
+                            : "放弃本次编辑？")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.primary)
+
+                        Text(confirmation == .delete
+                            ? "删除后将无法恢复。"
+                            : "未保存的笔记内容将不会被保留。")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                    .padding(.horizontal, 24)
+
+                    Divider()
+
+                    HStack(spacing: 0) {
+                        Button(confirmation == .delete ? "取消" : "继续编辑") {
+                            presentedConfirmation = nil
+                            continueEditingAfterConfirmation()
+                        }
+                        .font(.system(size: 17, weight: .medium))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                        Divider()
+
+                        Button(confirmation == .delete ? "删除" : "放弃编辑", role: .destructive) {
+                            presentedConfirmation = nil
+                            if confirmation == .delete {
+                                deleteAsset()
+                            } else {
+                                discardEditing()
+                            }
+                        }
+                        .font(.system(size: 17, weight: .medium))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .accessibilityIdentifier(
+                            confirmation == .delete
+                                ? "asset-delete-confirm"
+                                : "asset-discard-confirm"
+                        )
+                    }
+                    .frame(height: 69)
+                }
+                .frame(width: 313, height: panelHeight)
+                .background(Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 22))
+                .clipShape(RoundedRectangle(cornerRadius: 22))
+                .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier(
+                    confirmation == .delete
+                        ? "asset-delete-confirmation"
+                        : "asset-discard-confirmation"
+                )
+                .position(x: proxy.size.width / 2, y: panelCenterY)
+            }
+        }
+        .transition(.opacity)
+        .animation(.easeOut(duration: 0.18), value: presentedConfirmation)
+    }
+
     private func requestClose() {
         guard !controller.isMutationInFlight else { return }
         switch controller.dismissalDecision {
@@ -349,8 +427,7 @@ struct ReadingAssetCard: View {
             close(token, originalChromeState)
         case .confirmDiscard:
             let keyboardWasVisible = keyboardHeight > 0
-            presentsDiscardConfirmation = true
-            restoreEditorFocusIfNeeded(keyboardWasVisible)
+            presentConfirmation(.discard, preservingKeyboard: keyboardWasVisible)
         }
     }
 
@@ -378,9 +455,15 @@ struct ReadingAssetCard: View {
                 errorMessage = nil
             } catch {
                 errorMessage = "删除失败，请稍后重试"
-                presentsDeleteConfirmation = false
+                presentedConfirmation = nil
             }
         }
+    }
+
+    private func discardEditing() {
+        guard !controller.isMutationInFlight else { return }
+        controller.discard()
+        close(token, originalChromeState)
     }
 
     private func activateDelete() {
@@ -390,13 +473,28 @@ struct ReadingAssetCard: View {
             return
         }
         let keyboardWasVisible = keyboardHeight > 0
-        presentsDeleteConfirmation = true
-        restoreEditorFocusIfNeeded(keyboardWasVisible)
+        presentConfirmation(.delete, preservingKeyboard: keyboardWasVisible)
     }
 
-    private func restoreEditorFocusIfNeeded(_ keyboardWasVisible: Bool) {
-        guard keyboardWasVisible, isEditing else { return }
-        DispatchQueue.main.async {
+    private func presentConfirmation(
+        _ confirmation: Confirmation,
+        preservingKeyboard: Bool
+    ) {
+        confirmationPreservesKeyboard = preservingKeyboard && isEditing
+        presentedConfirmation = confirmation
+        restoreEditorFocusAfterConfirmationIfNeeded()
+    }
+
+    private func continueEditingAfterConfirmation() {
+        restoreEditorFocusAfterConfirmationIfNeeded()
+    }
+
+    private func restoreEditorFocusAfterConfirmationIfNeeded() {
+        guard confirmationPreservesKeyboard, isEditing else { return }
+        // The confirmation stays in the card's presentation layer. Reasserting
+        // the existing focus is therefore idempotent and never opens a keyboard
+        // that was hidden before the confirmation appeared.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             noteFocusRequest &+= 1
         }
     }

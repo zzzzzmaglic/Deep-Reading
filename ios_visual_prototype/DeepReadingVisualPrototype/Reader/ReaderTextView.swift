@@ -1,13 +1,6 @@
 import SwiftUI
 import UIKit
 
-/// Temporary visual QA aid requested for checking whether each glyph run sits
-/// correctly inside its TextKit line fragment. Keep enabled only until the
-/// user finishes the current typography comparison.
-private enum ReaderLineFrameDebug {
-    static let isEnabled = true
-}
-
 /// Draws persisted highlights as Figma-style underlines. They use real glyph
 /// fragments, rather than a paragraph-wide UIKit background, so a multi-line
 /// anchor gets one line per visual row and never colours paragraph leading.
@@ -17,10 +10,6 @@ private final class ReaderHighlightLayoutManager: NSLayoutManager {
 
     override func drawGlyphs(forGlyphRange glyphsToShow: NSRange, at origin: CGPoint) {
         super.drawGlyphs(forGlyphRange: glyphsToShow, at: origin)
-
-        if ReaderLineFrameDebug.isEnabled {
-            drawLineFragmentDebug(forGlyphRange: glyphsToShow, at: origin)
-        }
 
         let visibleCharacters = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
         textStorage?.enumerateAttribute(
@@ -60,19 +49,6 @@ private final class ReaderHighlightLayoutManager: NSLayoutManager {
         }
     }
 
-    private func drawLineFragmentDebug(forGlyphRange glyphRange: NSRange, at origin: CGPoint) {
-        guard let context = UIGraphicsGetCurrentContext() else { return }
-        context.saveGState()
-        context.setLineWidth(1)
-        enumerateLineFragments(forGlyphRange: glyphRange) { lineRect, _, _, _, _ in
-            let rect = lineRect.offsetBy(dx: origin.x, dy: origin.y).insetBy(dx: 0.5, dy: 0.5)
-            context.setFillColor(UIColor.systemTeal.withAlphaComponent(0.06).cgColor)
-            context.fill(rect)
-            context.setStrokeColor(UIColor.systemTeal.withAlphaComponent(0.82).cgColor)
-            context.stroke(rect)
-        }
-        context.restoreGState()
-    }
 }
 
 struct ReaderScrollEventClassifier {
@@ -265,10 +241,36 @@ struct ReaderTextView: UIViewRepresentable {
 
     final class ReaderViewportTextView: UITextView {
         var onViewportLayout: (() -> Void)?
+        private weak var scrollEdgeOwner: UIViewController?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+
+            if window == nil {
+                if scrollEdgeOwner?.contentScrollView(for: .top) === self {
+                    scrollEdgeOwner?.setContentScrollView(nil, for: .top)
+                }
+                scrollEdgeOwner = nil
+                return
+            }
+
+            guard let owner = owningViewController else { return }
+            owner.setContentScrollView(self, for: .top)
+            scrollEdgeOwner = owner
+        }
 
         override func layoutSubviews() {
             super.layoutSubviews()
             onViewportLayout?()
+        }
+
+        private var owningViewController: UIViewController? {
+            var responder: UIResponder? = self
+            while let current = responder {
+                if let controller = current as? UIViewController { return controller }
+                responder = current.next
+            }
+            return nil
         }
     }
 

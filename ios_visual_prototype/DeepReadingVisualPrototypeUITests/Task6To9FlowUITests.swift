@@ -1,6 +1,130 @@
 import XCTest
 
 final class Task6To9FlowUITests: XCTestCase {
+    func testReaderUsesSystemNavigationBarForTopChrome() throws {
+        let app = try launchSeededReader()
+
+        let reader = app.textViews["reader-text-view"]
+        XCTAssertTrue(reader.waitForExistence(timeout: 12))
+
+        let navigationBar = app.navigationBars.firstMatch
+        XCTAssertTrue(
+            navigationBar.waitForExistence(timeout: 4),
+            "The reader top chrome must be hosted by the system navigation bar."
+        )
+        XCTAssertFalse(
+            navigationBar.buttons["reader-back"].exists,
+            "The reader must use NavigationStack's native back item instead of inserting a custom leading toolbar button."
+        )
+        XCTAssertTrue(navigationBar.buttons.firstMatch.exists)
+        XCTAssertTrue(navigationBar.buttons["reader-open-summary"].exists)
+        XCTAssertTrue(
+            navigationBar.staticTexts["每日推文"].exists,
+            "The reader must expose its real centered title through the system navigation bar."
+        )
+    }
+
+    func testReaderHidesSystemNavigationBarWhileAssetCardIsPresented() throws {
+        let app = try launchSeededReader()
+        let navigationBar = app.navigationBars.firstMatch
+        XCTAssertTrue(navigationBar.waitForExistence(timeout: 8))
+
+        let standaloneNote = app.buttons["独立笔记"]
+        XCTAssertTrue(standaloneNote.waitForExistence(timeout: 8))
+        standaloneNote.tap()
+
+        XCTAssertTrue(app.otherElements["reading-asset-card"].waitForExistence(timeout: 5))
+        XCTAssertTrue(navigationBar.exists, "The covered reader navigation bar must remain mounted.")
+        XCTAssertFalse(navigationBar.isHittable, "The full-screen asset card must intercept navigation-bar interaction.")
+
+        let cardScrim = app.otherElements["reading-asset-card"]
+        cardScrim.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.20)).tap()
+        XCTAssertTrue(
+            navigationBar.waitForExistence(timeout: 5),
+            "Closing an empty full-screen asset card must reveal the unchanged reader navigation bar."
+        )
+    }
+
+    func testSummaryHidesSystemNavigationBarWhileAssetCardIsPresented() throws {
+        let app = try launchSeededReader()
+        let summaryButton = seededSummaryButton(in: app)
+        summaryButton.tap()
+
+        let navigationBar = app.navigationBars["标注与笔记"]
+        XCTAssertTrue(navigationBar.waitForExistence(timeout: 8))
+        let asset = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "summary-asset-")
+        ).firstMatch
+        XCTAssertTrue(asset.waitForExistence(timeout: 8))
+        asset.tap()
+
+        XCTAssertTrue(app.otherElements["reading-asset-card"].waitForExistence(timeout: 5))
+        XCTAssertTrue(navigationBar.exists, "The covered summary navigation bar must remain mounted.")
+        XCTAssertFalse(navigationBar.isHittable, "The full-screen asset card must intercept navigation-bar interaction.")
+    }
+
+    func testFullScreenAssetCardPreservesKeyboardForDiscardConfirmation() throws {
+        let app = try launchSeededReader()
+        let standaloneNote = app.buttons["独立笔记"]
+        XCTAssertTrue(standaloneNote.waitForExistence(timeout: 8))
+        standaloneNote.tap()
+
+        let editor = app.textViews["asset-note-editor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.tap()
+        editor.typeText("待放弃的笔记")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+
+        let cardScrim = app.otherElements["reading-asset-card"]
+        cardScrim.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.20)).tap()
+        let discardAlert = app.otherElements["asset-discard-confirmation"]
+        XCTAssertTrue(discardAlert.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["继续编辑"].exists)
+        XCTAssertTrue(app.buttons["放弃编辑"].exists)
+        XCTAssertTrue(
+            app.keyboards.firstMatch.exists,
+            "The discard confirmation must not dismiss a keyboard that was visible before the alert."
+        )
+
+        app.buttons["继续编辑"].tap()
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+    }
+
+    func testFullScreenAssetCardPreservesKeyboardForDeleteConfirmation() throws {
+        let app = try launchSeededReader()
+        seededSummaryButton(in: app).tap()
+
+        let asset = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "summary-asset-")
+        ).firstMatch
+        XCTAssertTrue(asset.waitForExistence(timeout: 8))
+        asset.tap()
+
+        let edit = app.buttons["asset-save"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 5))
+        edit.tap()
+        let editor = app.textViews["asset-note-editor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+
+        let delete = app.buttons["asset-delete"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 5))
+        delete.tap()
+        let deleteAlert = app.otherElements["asset-delete-confirmation"]
+        XCTAssertTrue(deleteAlert.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["取消"].exists)
+        XCTAssertTrue(app.buttons["删除"].exists)
+        XCTAssertTrue(
+            app.keyboards.firstMatch.exists,
+            "The delete confirmation must not dismiss a keyboard that was visible before the alert."
+        )
+
+        app.buttons["取消"].tap()
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+    }
+
     func testSummaryBackControlReturnsToTheReader() throws {
         let app = try launchSeededReader()
 
@@ -10,16 +134,20 @@ final class Task6To9FlowUITests: XCTestCase {
         let summaryButton = seededSummaryButton(in: app)
         summaryButton.tap()
 
-        let title = app.staticTexts["标注与笔记"]
-        XCTAssertTrue(title.waitForExistence(timeout: 8))
+        let navigationBar = app.navigationBars["标注与笔记"]
+        XCTAssertTrue(
+            navigationBar.waitForExistence(timeout: 8),
+            "汇总页标题必须由始终显示的系统导航栏承载。"
+        )
 
-        let back = app.buttons["summary-back-to-reader"]
+        XCTAssertFalse(navigationBar.buttons["summary-system-back-to-reader"].exists)
+        let back = navigationBar.buttons.firstMatch
         XCTAssertTrue(back.waitForExistence(timeout: 4))
-        XCTAssertLessThan(back.frame.minY, 120, "Summary back control must remain in the 116pt top chrome.")
+        XCTAssertTrue(back.isHittable, "汇总页系统返回控件必须接收点击。")
         back.tap()
 
         XCTAssertTrue(reader.waitForExistence(timeout: 8))
-        XCTAssertFalse(title.exists)
+        XCTAssertFalse(navigationBar.exists)
     }
 
     func testReaderAssetSummaryReturnsToAnchoredReader() throws {

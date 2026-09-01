@@ -68,6 +68,68 @@ final class KnowledgeBaseRepositoryTests: XCTestCase {
         XCTAssertEqual(previews.single?.coverAssetName, "KnowledgeCover1")
     }
 
+    func testCollectionPreviewAcceptsFractionalSecondPublicationTimes() async throws {
+        let remote = FakeSupabaseKnowledgeBaseRemote()
+        remote.currentOwnerID = currentOwnerID
+        var rows = collectionArticleRows()
+        rows["articles"] = [
+            articleRow(
+                id: visibleArticleID,
+                title: "Visible",
+                publishedAt: "2026-08-25T08:36:45.37148+00:00"
+            )
+        ]
+        remote.rowsByTable = rows
+        let repository = SupabaseKnowledgeBaseRepository(remote: remote)
+
+        let previews = try await repository.readCollectionArticles(collectionID: collectionID)
+
+        XCTAssertEqual(previews.single?.id, visibleArticleID)
+    }
+
+    func testCollectionPreviewCountsUniqueCurrentOwnerAssetsFromAnchorsAndStandaloneNotes() async throws {
+        let anchoredAssetID = UUID(uuidString: "50000000-0000-0000-0000-000000000010")!
+        let standaloneAssetID = UUID(uuidString: "50000000-0000-0000-0000-000000000011")!
+        let foreignAssetID = UUID(uuidString: "50000000-0000-0000-0000-000000000012")!
+        let remote = FakeSupabaseKnowledgeBaseRemote()
+        remote.currentOwnerID = currentOwnerID
+        var rows = collectionArticleRows()
+        rows["reading_assets"] = [
+            ["id": anchoredAssetID.uuidString, "owner_id": currentOwnerID.uuidString],
+            ["id": standaloneAssetID.uuidString, "owner_id": currentOwnerID.uuidString, "article_id": visibleArticleID.uuidString],
+            ["id": foreignAssetID.uuidString, "owner_id": foreignOwnerID.uuidString, "article_id": hiddenArticleID.uuidString],
+        ]
+        rows["asset_anchors"] = [
+            ["asset_id": anchoredAssetID.uuidString, "owner_id": currentOwnerID.uuidString, "article_id": visibleArticleID.uuidString],
+            ["asset_id": foreignAssetID.uuidString, "owner_id": foreignOwnerID.uuidString, "article_id": hiddenArticleID.uuidString],
+        ]
+        remote.rowsByTable = rows
+        let repository = SupabaseKnowledgeBaseRepository(remote: remote)
+
+        let previews = try await repository.readCollectionArticles(collectionID: collectionID)
+
+        XCTAssertEqual(previews.single?.readingAssetCount, 2)
+    }
+
+    func testCollectionPreviewCapsReadingAssetCountAtNinetyNine() async throws {
+        let remote = FakeSupabaseKnowledgeBaseRemote()
+        remote.currentOwnerID = currentOwnerID
+        var rows = collectionArticleRows()
+        rows["reading_assets"] = (0 ..< 100).map { offset in
+            [
+                "id": UUID(uuidString: String(format: "50000000-0000-0000-0000-%012d", offset))!.uuidString,
+                "owner_id": currentOwnerID.uuidString,
+                "article_id": visibleArticleID.uuidString,
+            ]
+        }
+        remote.rowsByTable = rows
+        let repository = SupabaseKnowledgeBaseRepository(remote: remote)
+
+        let previews = try await repository.readCollectionArticles(collectionID: collectionID)
+
+        XCTAssertEqual(previews.single?.readingAssetCount, 99)
+    }
+
     private func collectionArticleRows() -> [String: [[String: Any]]] {
         [
             "article_collections": [
@@ -82,7 +144,7 @@ final class KnowledgeBaseRepositoryTests: XCTestCase {
                 articleRow(id: visibleArticleID, title: "Visible"),
                 articleRow(id: hiddenArticleID, title: "Hidden"),
             ],
-            "reading_assets": [["id": UUID().uuidString, "article_id": visibleArticleID.uuidString]],
+            "reading_assets": [["id": UUID().uuidString, "owner_id": currentOwnerID.uuidString, "article_id": visibleArticleID.uuidString]],
         ]
     }
 
@@ -98,14 +160,19 @@ final class KnowledgeBaseRepositoryTests: XCTestCase {
         return rows
     }
 
-    private func articleRow(id: UUID, title: String, coverAssetName: String = "KnowledgeCoverPlaceholder") -> [String: Any] {
+    private func articleRow(
+        id: UUID,
+        title: String,
+        coverAssetName: String = "KnowledgeCoverPlaceholder",
+        publishedAt: String = "2026-08-23T00:00:00Z"
+    ) -> [String: Any] {
         [
             "id": id.uuidString,
             "title": title,
             "source_name": "Test source",
             "cover_asset_name": coverAssetName,
             "cognitive_dimension": "方法论",
-            "published_at": "2026-08-23T00:00:00Z",
+            "published_at": publishedAt,
         ]
     }
 }

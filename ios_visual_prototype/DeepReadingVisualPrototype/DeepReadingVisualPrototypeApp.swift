@@ -134,8 +134,8 @@ enum AppTab: String, CaseIterable, Hashable, Sendable, TabItem {
 }
 
 enum KnowledgeNavigationDestination: Hashable {
-    case collection(UUID)
-    case tag(UUID)
+    case collection(id: UUID, title: String)
+    case tag(id: UUID, title: String)
     case reader(ReaderRoute)
     case summary(articleID: UUID, origin: ReaderOrigin)
 }
@@ -264,7 +264,7 @@ struct AppRootView: View {
                         .tag(AppTab.knowledge)
                         .toolbarVisibility(.hidden, for: .tabBar)
                     }
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                    .safeAreaBar(edge: .bottom, spacing: 0) {
                         if selectedTab == .home || !hidesCustomTabBar {
                             KnowledgeGlassTabBar(selection: $selectedTab)
                                 .ignoresSafeArea()
@@ -357,21 +357,21 @@ private struct KnowledgeNavigationContainer: View {
             KnowledgeHomeScreen(repository: dependencies.knowledgeRepository)
             .navigationDestination(for: KnowledgeNavigationDestination.self) { destination in
                 switch destination {
-                case let .collection(id):
+                case let .collection(id, title):
                     CollectionDetailScreen(
                         collectionID: id,
+                        initialTitle: title,
                         repository: dependencies.knowledgeRepository,
-                        dismiss: popCurrentDestination,
                         selectionStateChanged: { detailSelectionIsActive = $0 },
                         openArticle: { article in
                             path.append(.reader(ReaderRoute(articleID: article.id, anchorID: nil, origin: .knowledge)))
                         }
                     )
-                case let .tag(id):
+                case let .tag(id, title):
                     TagDetailScreen(
                         tagID: id,
+                        initialTitle: title,
                         dependencies: dependencies.readerDependencies,
-                        dismiss: popCurrentDestination,
                         selectionStateChanged: { detailSelectionIsActive = $0 },
                         showInArticle: { path.append(.reader($0)) }
                     )
@@ -382,7 +382,6 @@ private struct KnowledgeNavigationContainer: View {
                         onOpenSummary: { route in
                             path.append(.summary(articleID: route.articleID, origin: route.origin))
                         },
-                        onBack: { _ in popCurrentDestination() },
                         assetRefreshRevision: readerAssetRefreshRevision
                     )
                     .toolbar(.hidden, for: .tabBar)
@@ -391,7 +390,6 @@ private struct KnowledgeNavigationContainer: View {
                         articleID: articleID,
                         origin: origin,
                         dependencies: dependencies.readerDependencies,
-                        dismissToReader: popCurrentDestination,
                         showInArticle: replaceReaderAfterDismissingSummary,
                         refreshReaderAssets: { readerAssetRefreshRevision += 1 }
                     )
@@ -413,11 +411,6 @@ private struct KnowledgeNavigationContainer: View {
                 false
             }
         }
-    }
-
-    private func popCurrentDestination() {
-        guard !path.isEmpty else { return }
-        path.removeLast()
     }
 
     private func replaceReaderAfterDismissingSummary(with route: ReaderRoute) {

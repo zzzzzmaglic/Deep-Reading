@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 @testable import DeepReadingVisualPrototype
 
 @MainActor
@@ -71,8 +72,39 @@ final class CollectionDetailCoordinatorTests: XCTestCase {
         XCTAssertTrue(CollectionDetailScreenPolicy.attachesSelectionGesture(isLockedCollection: false))
     }
 
+    func testDetailNavigationTitleUsesTheKnownNameBeforeTheDetailLoadCompletes() {
+        XCTAssertEqual(
+            KnowledgeDetailNavigationTitlePolicy.title(initialTitle: "往期推文", loadedTitle: nil),
+            "往期推文"
+        )
+        XCTAssertEqual(
+            KnowledgeDetailNavigationTitlePolicy.title(initialTitle: "旧名称", loadedTitle: "更新后的名称"),
+            "更新后的名称"
+        )
+    }
+
     func testDetailChromeRendersAboveTopProgressiveEdge() {
         XCTAssertEqual(CollectionDetailScreenPolicy.topLayerOrder, [.progressiveEdge, .chrome])
+    }
+
+    func testCollectionArticleTitleLabelUsesCharacterWrappingWithoutPushOut() throws {
+        let titleContainer = CollectionArticleTitleLabel()
+        let label = try XCTUnwrap(titleContainer.subviews.first as? UILabel)
+
+        XCTAssertEqual(label.numberOfLines, 2)
+        XCTAssertEqual(label.lineBreakMode, .byCharWrapping)
+        XCTAssertEqual(label.lineBreakStrategy, [])
+    }
+
+    func testCollectionArticleTitleLabelDrawsAShortTitleOnTheFirstLine() throws {
+        let label = CollectionArticleTitleLabel()
+        label.configure(title: "短标题")
+        label.frame = CGRect(x: 0, y: 0, width: 224, height: 42)
+        label.setNeedsLayout()
+        label.layoutIfNeeded()
+
+        let firstInkRow = try XCTUnwrap(firstDarkInkRow(in: label))
+        XCTAssertLessThanOrEqual(firstInkRow, 4)
     }
 
     private func makeCollection(name: String, isSystem: Bool = false) -> KnowledgeCollection {
@@ -84,6 +116,30 @@ final class CollectionDetailCoordinatorTests: XCTestCase {
             id: UUID(), title: title, sourceName: "来源", coverAssetName: "KnowledgeCoverPlaceholder",
             cognitiveDimension: "方法论", publishedAt: .distantPast, readingAssetCount: 0
         )
+    }
+
+    private func firstDarkInkRow(in label: UIView) -> Int? {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let image = UIGraphicsImageRenderer(size: label.bounds.size, format: format).image { context in
+            UIColor.white.setFill()
+            context.fill(label.bounds)
+            label.layer.render(in: context.cgContext)
+        }
+        guard let cgImage = image.cgImage, let data = cgImage.dataProvider?.data, let bytes = CFDataGetBytePtr(data) else {
+            return nil
+        }
+
+        for row in 0 ..< cgImage.height {
+            for column in 0 ..< cgImage.width {
+                let offset = row * cgImage.bytesPerRow + column * 4
+                if bytes[offset] < 90, bytes[offset + 1] < 90, bytes[offset + 2] < 90 {
+                    return row
+                }
+            }
+        }
+        return nil
     }
 }
 
