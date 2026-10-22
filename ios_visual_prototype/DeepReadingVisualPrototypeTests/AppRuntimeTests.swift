@@ -383,7 +383,8 @@ final class AppRuntimeTests: XCTestCase {
             highlightedAnchorIntersecting: { _ in nil },
             highlightedAnchorRange: { _ in nil },
             onSelectionAction: { _, _ in },
-            onHighlightedTextAction: { _, _ in }
+            onHighlightedTextAction: { _, _ in },
+            showsBottomEdgeEffect: true
         )
         let controller = UIHostingController(rootView: reader.frame(width: 393, height: 852))
         let window = try makeWindow(rootViewController: controller)

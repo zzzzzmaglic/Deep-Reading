@@ -113,6 +113,9 @@ struct ReaderTextView: UIViewRepresentable {
     let highlightedAnchorRange: (TextAnchor) -> NSRange?
     let onSelectionAction: (NSRange, ReaderSelectionAction) -> Void
     let onHighlightedTextAction: (TextAnchor, ReaderSelectionAction) -> Void
+    /// Keep UIKit's native bottom scroll-edge treatment in step with the
+    /// reader controls that sit over the same edge.
+    let showsBottomEdgeEffect: Bool
 
     func makeCoordinator() -> TextViewCoordinator {
         TextViewCoordinator(
@@ -150,6 +153,8 @@ struct ReaderTextView: UIViewRepresentable {
         textView.showsVerticalScrollIndicator = false
         textView.showsHorizontalScrollIndicator = false
         textView.contentInsetAdjustmentBehavior = .never
+        textView.bottomEdgeEffect.style = .soft
+        textView.bottomEdgeEffect.isHidden = !showsBottomEdgeEffect
         // The chrome is a non-layout overlay. Reserve its visual space here
         // instead of using SwiftUI safeAreaBar, which changes UIKit scroll-view
         // geometry whenever the chrome transitions.
@@ -188,6 +193,8 @@ struct ReaderTextView: UIViewRepresentable {
     }
 
     func updateUIView(_ textView: ReaderViewportTextView, context: Context) {
+        textView.bottomEdgeEffect.style = .soft
+        textView.bottomEdgeEffect.isHidden = !showsBottomEdgeEffect
         context.coordinator.updateCallbacks(
             onVisibleUTF16Location: onVisibleUTF16Location,
             onScrollDirection: onScrollDirection,

@@ -163,7 +163,8 @@ struct ReaderScreen: View {
                 Task { @MainActor in
                     await coordinator.performHighlightedTextAction(anchor, action: action)
                 }
-            }
+            },
+            showsBottomEdgeEffect: coordinator.chromeIsVisible
         )
         .id(ViewportIdentity(
             route: route,
@@ -174,14 +175,13 @@ struct ReaderScreen: View {
         // canvas. The system navigation bar owns the top chrome and its inset.
         .ignoresSafeArea()
         .overlay(alignment: .bottom) {
-            ReaderBottomSoftEdge(isVisible: coordinator.chromeIsVisible)
-        }
-        .overlay(alignment: .bottom) {
-            ReaderBottomGlassControls(
+            ReaderBottomScrollEdgeContainer(
                 showsReaderChrome: coordinator.chromeIsVisible,
                 showsAIControl: true,
                 showAssetCard: { _ = coordinator.beginStandaloneNote() }
             )
+            .frame(maxWidth: .infinity)
+            .frame(height: 80)
         }
         .overlay(alignment: .bottom) {
             if coordinator.progressFailure != nil || coordinator.selectionFailure != nil || coordinator.assetFailure != nil {

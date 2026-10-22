@@ -96,6 +96,9 @@ final class ReaderCoordinator: ObservableObject {
     }
 
     func load(route: ReaderRoute) async throws {
+        // Entering (or re-entering from a reader destination) always starts
+        // with the complete reader chrome, including its bottom edge effect.
+        chromeIsVisible = true
         let isNewRoute = lastRoute != route
         loadGeneration += 1
         let generation = loadGeneration
