@@ -12,7 +12,10 @@ const ANCHOR_REQUIRED_TYPES = new Set(["selection_explain", "highlight_explain"]
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const MAX_BODY_CHARS = 32_000;
 const MAX_QUESTION_CHARS = 2_000;
-const MAX_OUTPUT_TOKEN_CEILING = 4_096;
+const MAX_QUOTED_TEXT_CHARS = 4_000;
+const MAX_HISTORY_MESSAGES = 20;
+const MAX_HISTORY_CHARS = 16_000;
+const OUTPUT_TOKEN_RESERVATION = 4_096;
 
 type RequestType =
   | "question"
@@ -27,6 +30,13 @@ interface CompanionRequest {
   requestType: RequestType;
   question: string;
   anchor?: ArticleAnchor;
+  quotedText?: string;
+  history: CompanionHistoryMessage[];
+}
+
+interface CompanionHistoryMessage {
+  role: "user" | "assistant";
+  content: string;
 }
 
 interface AuthUser {
@@ -144,7 +154,10 @@ async function parseRequest(request: Request): Promise<CompanionRequest> {
   if (!ALLOWED_REQUEST_TYPES.has(requestType as RequestType)) {
     throw new GatewayError("invalid_request_type", 400, "request_rejected");
   }
-  if (!question || question.length > MAX_QUESTION_CHARS) {
+  if (
+    question.length > MAX_QUESTION_CHARS ||
+    (!question && !ANCHOR_REQUIRED_TYPES.has(requestType))
+  ) {
     throw new GatewayError("invalid_question", 400, "request_rejected");
   }
 
@@ -167,7 +180,44 @@ async function parseRequest(request: Request): Promise<CompanionRequest> {
     throw new GatewayError("invalid_anchor", 400, "request_rejected");
   }
 
-  return { articleId, requestType: requestType as RequestType, question, anchor };
+  const quotedText = typeof body.quotedText === "string" ? body.quotedText.trim() : undefined;
+  if (quotedText && quotedText.length > MAX_QUOTED_TEXT_CHARS) {
+    throw new GatewayError("invalid_quoted_text", 400, "request_rejected");
+  }
+  if (ANCHOR_REQUIRED_TYPES.has(requestType) && !quotedText) {
+    throw new GatewayError("invalid_quoted_text", 400, "request_rejected");
+  }
+
+  const rawHistory = body.history ?? [];
+  if (!Array.isArray(rawHistory) || rawHistory.length > MAX_HISTORY_MESSAGES) {
+    throw new GatewayError("invalid_history", 400, "request_rejected");
+  }
+  let historyChars = 0;
+  const history = rawHistory.map((item): CompanionHistoryMessage => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new GatewayError("invalid_history", 400, "request_rejected");
+    }
+    const raw = item as Record<string, unknown>;
+    const role = raw.role;
+    const content = typeof raw.content === "string" ? raw.content.trim() : "";
+    if ((role !== "user" && role !== "assistant") || !content) {
+      throw new GatewayError("invalid_history", 400, "request_rejected");
+    }
+    historyChars += content.length;
+    return { role, content };
+  });
+  if (historyChars > MAX_HISTORY_CHARS) {
+    throw new GatewayError("invalid_history", 400, "request_rejected");
+  }
+
+  return {
+    articleId,
+    requestType: requestType as RequestType,
+    question,
+    anchor,
+    quotedText,
+    history,
+  };
 }
 
 async function* upstreamData(body: ReadableStream<Uint8Array>) {
@@ -201,11 +251,22 @@ async function* upstreamData(body: ReadableStream<Uint8Array>) {
   }
 }
 
-function companionPrompt(request: CompanionRequest, articleContext: string): string {
+function companionPrompt(request: CompanionRequest): string {
   return [
     `Request type: ${request.requestType}`,
-    `Question: ${request.question}`,
-    "Current article context:",
+    request.question ? `Question: ${request.question}` : null,
+    request.quotedText ? `Quoted text:\n${request.quotedText}` : null,
+  ].filter((part): part is string => part !== null).join("\n\n");
+}
+
+function articleSystemPrompt(articleTitle: string, articleContext: string): string {
+  return [
+    "你是阅读器内的 AI 伴读。优先结合用户正在阅读的文章全文回答，语言自然、清楚、具体。",
+    "对于 AI 释义，重点解释引用内容在本文语境中的含义，不要只给百科式定义。",
+    "本功能不联网，也不检索用户的全局知识库；需要实时外部信息时应明确说明能力边界。",
+    "不要输出隐藏推理过程。",
+    `当前文章标题：${articleTitle}`,
+    "当前文章全文：",
     articleContext,
   ].join("\n\n");
 }
@@ -252,11 +313,6 @@ export function createAiCompanionHandler(
       const supabaseUrl = requireEnvironment(dependencies.env, "SUPABASE_URL");
       const serviceRoleKey = requireEnvironment(dependencies.env, "SUPABASE_SERVICE_ROLE_KEY");
       const deepSeekApiKey = requireEnvironment(dependencies.env, "DEEPSEEK_API_KEY");
-      const maxOutputTokens = parsePositiveInteger(
-        dependencies.env("AI_MAX_OUTPUT_TOKENS"),
-        "AI_MAX_OUTPUT_TOKENS",
-        MAX_OUTPUT_TOKEN_CEILING,
-      );
       const configuredRequestsPerHour = parsePositiveInteger(
         dependencies.env("AI_REQUESTS_PER_HOUR"),
         "AI_REQUESTS_PER_HOUR",
@@ -308,6 +364,22 @@ export function createAiCompanionHandler(
       if (articleBlocks.length === 0) {
         throw new GatewayError("article_not_found", 404, "article_lookup_empty");
       }
+      const articleUrl = new URL(`${supabaseUrl}/rest/v1/articles`);
+      articleUrl.searchParams.set("select", "title");
+      articleUrl.searchParams.set("id", `eq.${companionRequest.articleId}`);
+      articleUrl.searchParams.set("limit", "1");
+      const articleResponse = await dependencies.fetch(articleUrl, {
+        headers: { apikey: serviceRoleKey, Authorization: authorization },
+        signal: request.signal,
+      });
+      if (!articleResponse.ok) {
+        throw new GatewayError("article_load_failed", 502, "article_lookup_failed");
+      }
+      const articleRows = await articleResponse.json() as Array<{ title?: string }>;
+      const articleTitle = articleRows[0]?.title?.trim();
+      if (!articleTitle) {
+        throw new GatewayError("article_not_found", 404, "article_lookup_empty");
+      }
       let articleContext: string;
       try {
         articleContext = buildArticleContext(articleBlocks, companionRequest.anchor);
@@ -325,7 +397,7 @@ export function createAiCompanionHandler(
         {
           method: "POST",
           headers: rpcHeaders,
-          body: JSON.stringify({ p_estimated_output_tokens: maxOutputTokens }),
+          body: JSON.stringify({ p_estimated_output_tokens: OUTPUT_TOKEN_RESERVATION }),
           signal: request.signal,
         },
       );
@@ -406,20 +478,19 @@ export function createAiCompanionHandler(
                 "Content-Type": "application/json",
               },
               body: JSON.stringify({
-                model: dependencies.env("DEEPSEEK_MODEL")?.trim() || "DeepSeek-V4-Pro",
+                model: "deepseek-flash",
                 stream: true,
                 stream_options: { include_usage: true },
                 thinking: { type: "disabled" },
-                max_tokens: maxOutputTokens,
                 messages: [
                   {
                     role: "system",
-                    content:
-                      "Answer only from the supplied current-article context. Do not use internet or global knowledge. If the context is insufficient, say so briefly. Return only the answer, never hidden reasoning.",
+                    content: articleSystemPrompt(articleTitle, articleContext),
                   },
+                  ...companionRequest.history,
                   {
                     role: "user",
-                    content: companionPrompt(companionRequest, articleContext),
+                    content: companionPrompt(companionRequest),
                   },
                 ],
               }),

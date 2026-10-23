@@ -58,7 +58,8 @@ struct ReaderPrototypeView: View {
                     ReaderBottomGlassControls(
                         showsReaderChrome: state.readerChromeIsVisible,
                         showsAIControl: state.aiControlIsVisible,
-                        showAssetCard: { show(.assetCard) }
+                        showAssetCard: { show(.assetCard) },
+                        showAICompanion: {}
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
                 }

@@ -71,6 +71,7 @@ final class AppRuntime: AppRuntimeBootstrapping, @unchecked Sendable {
     let articleRepository: SupabaseArticleRepository
     let readingAssetRepository: SupabaseReadingAssetRepository
     let readingReportGenerator: SupabaseReadingReportGenerator
+    let aiCompanionRepository: SupabaseAICompanionRepository
     let knowledgeRepository: SupabaseKnowledgeBaseRepository
     let readerDependencies: ReaderDependencies?
     let knowledgeDependencies: KnowledgeDependencies?
@@ -98,11 +99,13 @@ final class AppRuntime: AppRuntimeBootstrapping, @unchecked Sendable {
         articleRepository = SupabaseArticleRepository(client: client)
         readingAssetRepository = SupabaseReadingAssetRepository(client: client)
         readingReportGenerator = SupabaseReadingReportGenerator(client: client)
+        aiCompanionRepository = SupabaseAICompanionRepository(client: client)
         knowledgeRepository = SupabaseKnowledgeBaseRepository(client: client)
         readerDependencies = ReaderDependencies(
             articleRepository: articleRepository,
             readingAssetRepository: readingAssetRepository,
-            readingReportGenerator: readingReportGenerator
+            readingReportGenerator: readingReportGenerator,
+            aiCompanionRepository: aiCompanionRepository
         )
         knowledgeDependencies = KnowledgeDependencies(
             knowledgeRepository: knowledgeRepository,

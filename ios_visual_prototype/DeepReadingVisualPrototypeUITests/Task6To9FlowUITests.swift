@@ -1,6 +1,26 @@
 import XCTest
 
 final class Task6To9FlowUITests: XCTestCase {
+    func testReaderOpensAICompanionSheetAndAcceptsTextInput() throws {
+        let app = try launchReaderWithoutSeeding()
+        let reader = app.textViews["reader-text-view"]
+        XCTAssertTrue(reader.waitForExistence(timeout: 12))
+
+        let openAI = app.buttons["reader-open-ai-companion"]
+        XCTAssertTrue(openAI.waitForExistence(timeout: 8))
+        openAI.tap()
+
+        XCTAssertTrue(app.staticTexts["ai-companion-sheet-title"].waitForExistence(timeout: 5))
+        // SwiftUI's axis-vertical TextField is backed by UITextView but is
+        // intentionally exposed to XCUITest as a TextField.
+        let input = app.textFields["ai-companion-input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        input.tap()
+        input.typeText("这篇文章的核心观点是什么？")
+        XCTAssertTrue(app.buttons["ai-companion-send"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["你可以这样问"].exists)
+    }
+
     func testReaderUsesSystemNavigationBarForTopChrome() throws {
         let app = try launchSeededReader()
 

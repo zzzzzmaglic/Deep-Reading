@@ -11,7 +11,10 @@ struct ReaderScreen: View {
     let assetRefreshRevision: Int
 
     @StateObject private var coordinator: ReaderCoordinator
+    @StateObject private var aiCompanion: AICompanionController
     @State private var readingReport: ReadingReportPresentation?
+    @State private var isAICompanionPresented = false
+    @State private var focusesAIComposerOnPresent = false
 
     private struct ViewportIdentity: Hashable {
         let route: ReaderRoute
@@ -31,6 +34,9 @@ struct ReaderScreen: View {
         self.onFinishReading = onFinishReading
         self.assetRefreshRevision = assetRefreshRevision
         _coordinator = StateObject(wrappedValue: ReaderCoordinator(dependencies: dependencies))
+        _aiCompanion = StateObject(
+            wrappedValue: AICompanionController(repository: dependencies.aiCompanionRepository)
+        )
     }
 
     var body: some View {
@@ -58,6 +64,7 @@ struct ReaderScreen: View {
         .task(id: route) {
             do {
                 try await coordinator.load(route: route)
+                aiCompanion.beginSession(articleID: route.articleID)
                 #if DEBUG
                 await coordinator.seedHighlightForUITestIfRequested()
                 #endif
@@ -119,6 +126,13 @@ struct ReaderScreen: View {
             .id(presentation.token)
             .ignoresSafeArea()
         }
+        .sheet(isPresented: $isAICompanionPresented) {
+            AICompanionSheet(
+                controller: aiCompanion,
+                focusesComposerOnAppear: focusesAIComposerOnPresent
+            )
+            .presentationDetents([.fraction(0.6), .large])
+        }
         .task(id: assetRefreshRevision) {
             guard assetRefreshRevision > 0 else { return }
             await coordinator.refreshAssets()
@@ -162,6 +176,22 @@ struct ReaderScreen: View {
             },
             onSelectionAction: { selection, action in
                 Task { @MainActor in
+                    if action == .explainWithAI {
+                        do {
+                            let anchor = try layout.anchor(for: selection)
+                            presentAICompanion(reference: AICompanionReference(
+                                text: anchor.selectedText,
+                                anchor: AICompanionAnchor(
+                                    startBlockId: anchor.startBlockID,
+                                    endBlockId: anchor.endBlockID
+                                ),
+                                requestType: .selectionExplain
+                            ))
+                        } catch {
+                            coordinator.recordSelectionFailure(for: action)
+                        }
+                        return
+                    }
                     do {
                         try await coordinator.performSelection(selection, action: action)
                     } catch {
@@ -171,6 +201,17 @@ struct ReaderScreen: View {
             },
             onHighlightedTextAction: { anchor, action in
                 Task { @MainActor in
+                    if action == .explainWithAI {
+                        presentAICompanion(reference: AICompanionReference(
+                            text: anchor.selectedText,
+                            anchor: AICompanionAnchor(
+                                startBlockId: anchor.startBlockID,
+                                endBlockId: anchor.endBlockID
+                            ),
+                            requestType: .highlightExplain
+                        ))
+                        return
+                    }
                     await coordinator.performHighlightedTextAction(anchor, action: action)
                 }
             },
@@ -191,7 +232,8 @@ struct ReaderScreen: View {
             ReaderBottomScrollEdgeContainer(
                 showsReaderChrome: coordinator.chromeIsVisible,
                 showsAIControl: true,
-                showAssetCard: { _ = coordinator.beginStandaloneNote() }
+                showAssetCard: { _ = coordinator.beginStandaloneNote() },
+                showAICompanion: { presentAICompanion(reference: nil) }
             )
             .frame(maxWidth: .infinity)
             .frame(height: 80)
@@ -290,6 +332,13 @@ struct ReaderScreen: View {
             guard let current = readingReport, current.articleID == articleID else { return }
             readingReport = current.with(bodyState: bodyState)
         }
+    }
+
+    private func presentAICompanion(reference: AICompanionReference?) {
+        coordinator.showChrome()
+        aiCompanion.prepare(reference: reference)
+        focusesAIComposerOnPresent = reference != nil
+        isAICompanionPresented = true
     }
 
 }

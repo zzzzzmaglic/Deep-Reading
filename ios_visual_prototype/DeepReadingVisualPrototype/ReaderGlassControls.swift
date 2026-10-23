@@ -39,6 +39,7 @@ struct ReaderBottomGlassControls: View {
     let showsReaderChrome: Bool
     let showsAIControl: Bool
     let showAssetCard: () -> Void
+    let showAICompanion: () -> Void
 
     var body: some View {
         HStack {
@@ -75,7 +76,12 @@ struct ReaderBottomGlassControls: View {
             Spacer()
 
             if showsAIControl {
-                GlassIconControl(symbol: "circle.grid.2x2.fill", label: "AI 伴读（仅视觉）", action: {}, isEnabled: false)
+                GlassIconControl(
+                    symbol: "circle.grid.2x2.fill",
+                    label: "AI 伴读",
+                    action: showAICompanion
+                )
+                .accessibilityIdentifier("reader-open-ai-companion")
             }
         }
         .padding(.horizontal, 22)
@@ -94,12 +100,14 @@ struct ReaderBottomScrollEdgeContainer: UIViewControllerRepresentable {
     let showsReaderChrome: Bool
     let showsAIControl: Bool
     let showAssetCard: () -> Void
+    let showAICompanion: () -> Void
 
     func makeUIViewController(context: Context) -> ReaderBottomScrollEdgeHostController {
         ReaderBottomScrollEdgeHostController(
             showsReaderChrome: showsReaderChrome,
             showsAIControl: showsAIControl,
-            showAssetCard: showAssetCard
+            showAssetCard: showAssetCard,
+            showAICompanion: showAICompanion
         )
     }
 
@@ -107,7 +115,8 @@ struct ReaderBottomScrollEdgeContainer: UIViewControllerRepresentable {
         controller.update(
             showsReaderChrome: showsReaderChrome,
             showsAIControl: showsAIControl,
-            showAssetCard: showAssetCard
+            showAssetCard: showAssetCard,
+            showAICompanion: showAICompanion
         )
     }
 }
@@ -119,14 +128,16 @@ final class ReaderBottomScrollEdgeHostController: UIViewController {
     init(
         showsReaderChrome: Bool,
         showsAIControl: Bool,
-        showAssetCard: @escaping () -> Void
+        showAssetCard: @escaping () -> Void,
+        showAICompanion: @escaping () -> Void
     ) {
         controlsHost = UIHostingController(
             rootView: AnyView(
                 ReaderBottomGlassControls(
                     showsReaderChrome: showsReaderChrome,
                     showsAIControl: showsAIControl,
-                    showAssetCard: showAssetCard
+                    showAssetCard: showAssetCard,
+                    showAICompanion: showAICompanion
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .ignoresSafeArea()
@@ -178,13 +189,15 @@ final class ReaderBottomScrollEdgeHostController: UIViewController {
     func update(
         showsReaderChrome: Bool,
         showsAIControl: Bool,
-        showAssetCard: @escaping () -> Void
+        showAssetCard: @escaping () -> Void,
+        showAICompanion: @escaping () -> Void
     ) {
         controlsHost.rootView = AnyView(
             ReaderBottomGlassControls(
                 showsReaderChrome: showsReaderChrome,
                 showsAIControl: showsAIControl,
-                showAssetCard: showAssetCard
+                showAssetCard: showAssetCard,
+                showAICompanion: showAICompanion
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .ignoresSafeArea()

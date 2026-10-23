@@ -5,15 +5,18 @@ struct ReaderDependencies: @unchecked Sendable {
     let articleRepository: any ArticleRepository
     let readingAssetRepository: any ReadingAssetRepository
     let readingReportGenerator: any ReadingReportGenerating
+    let aiCompanionRepository: any AICompanionStreaming
 
     init(
         articleRepository: any ArticleRepository,
         readingAssetRepository: any ReadingAssetRepository,
-        readingReportGenerator: any ReadingReportGenerating = UnavailableReadingReportGenerator()
+        readingReportGenerator: any ReadingReportGenerating = UnavailableReadingReportGenerator(),
+        aiCompanionRepository: any AICompanionStreaming = UnavailableAICompanionRepository()
     ) {
         self.articleRepository = articleRepository
         self.readingAssetRepository = readingAssetRepository
         self.readingReportGenerator = readingReportGenerator
+        self.aiCompanionRepository = aiCompanionRepository
     }
 }
 
@@ -229,8 +232,8 @@ final class ReaderCoordinator: ObservableObject {
                 presentAssetDraft(AssetDraft(anchor: anchor, articleID: article.id))
             }
         case .copy, .explainWithAI, .removeHighlight, .manageTags:
-            // Clipboard handling belongs to UITextView. AI is deliberately a
-            // no-op until the later companion workflow is implemented.
+            // Clipboard handling belongs to UITextView. ReaderScreen owns the
+            // AI sheet so it can preserve one session across all entry points.
             break
         }
     }
@@ -262,8 +265,7 @@ final class ReaderCoordinator: ObservableObject {
         case .manageTags:
             presentAssetDraft(draft(for: asset), presentingTags: true)
         case .copy, .explainWithAI:
-            // Copy is applied by the UIKit menu. AI remains intentionally
-            // inert until the companion workflow is implemented.
+            // Copy is applied by the UIKit menu. ReaderScreen owns AI actions.
             break
         case .highlight:
             // A persisted highlight never re-enters the selection/create path.

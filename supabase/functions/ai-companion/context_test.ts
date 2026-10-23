@@ -48,10 +48,8 @@ function gatewayFixture(fixture: GatewayFixture = {}) {
     AI_ENABLED: "true",
     AI_GLOBAL_DAILY_TOKEN_BUDGET: "10000",
     AI_GLOBAL_WEEKLY_TOKEN_BUDGET: "20000",
-    AI_MAX_OUTPUT_TOKENS: "100",
     AI_REQUESTS_PER_HOUR: "20",
     DEEPSEEK_API_KEY: "server-test-key",
-    DEEPSEEK_MODEL: "DeepSeek-V4-Pro",
     SUPABASE_SERVICE_ROLE_KEY: "server-test-role",
     SUPABASE_URL: "http://supabase.test",
   };
@@ -93,6 +91,9 @@ function gatewayFixture(fixture: GatewayFixture = {}) {
       if (url.includes("/rest/v1/article_blocks")) {
         return Response.json(blocksOf(20));
       }
+      if (url.includes("/rest/v1/articles")) {
+        return Response.json([{ title: "Test article" }]);
+      }
       if (url === "https://api.deepseek.com/chat/completions") {
         return new Response(fixture.deepSeekStream ?? "data: [DONE]\n\n", {
           headers: { "Content-Type": "text/event-stream" },
@@ -113,6 +114,8 @@ function gatewayFixture(fixture: GatewayFixture = {}) {
 function companionRequest(
   requestType = "question",
   anchor?: Record<string, string>,
+  history: Array<{ role: "user" | "assistant"; content: string }> = [],
+  question = "Explain this",
 ) {
   return new Request("http://localhost/functions/v1/ai-companion", {
     method: "POST",
@@ -120,7 +123,14 @@ function companionRequest(
       Authorization: "Bearer anonymous-jwt",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ articleId, requestType, question: "Explain this", anchor }),
+    body: JSON.stringify({
+      articleId,
+      requestType,
+      question,
+      anchor,
+      quotedText: requestType === "question" ? undefined : "quoted selection",
+      history,
+    }),
   });
 }
 
@@ -135,62 +145,23 @@ async function responseEvents(response: Response) {
   });
 }
 
-Deno.test(
-  "long article context contains the selected block and neighbours only",
-  () => {
-    const context = buildArticleContext(blocksOf(20), anchorAt(10));
+Deno.test("article context always contains the complete ordered article", () => {
+  const context = buildArticleContext(blocksOf(20).reverse(), anchorAt(10));
 
-    assert(context.includes("block-9"));
-    assert(context.includes("block-10"));
-    assert(context.includes("block-11"));
-    assert(!context.includes("block-0"));
-  },
-);
-
-Deno.test("large multi-block context preserves both anchor edges and neighbours", () => {
-  const blocks = blocksOf(20).map((block) => ({
-    ...block,
-    content: `${block.content}:${"x".repeat(3_000)}`,
-  }));
-  const context = buildArticleContext(blocks, {
-    startBlockId: "id-8",
-    endBlockId: "id-12",
-  });
-
-  for (const index of [7, 8, 12, 13]) {
-    assert(context.includes(`block-${index}:`), `context omitted block-${index}`);
+  for (let index = 0; index < 20; index += 1) {
+    assert(context.includes(`block-${index}`), `context omitted block-${index}`);
   }
-  assert(!context.includes("block-6:"));
-  assert(!context.includes("block-14:"));
-  assert(context.length <= 12_000);
+  assert(context.indexOf("block-0") < context.indexOf("block-19"));
 });
 
-Deno.test("header-heavy anchored context never exceeds the hard character cap", () => {
-  const blocks = Array.from({ length: 1_500 }, (_, index) => ({
-    id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
-    position: index + 1,
-    content: `extreme-${index}:${"x".repeat(20)}`,
-  }));
-  const context = buildArticleContext(blocks, {
-    startBlockId: blocks[600].id,
-    endBlockId: blocks[900].id,
-  });
-
-  assert(context.length <= 12_000, `context length was ${context.length}`);
-  for (const index of [599, 600, 900, 901]) {
-    assert(context.includes(`extreme-${index}:`), `context omitted extreme-${index}`);
+Deno.test("article context rejects an anchor outside the current article", () => {
+  let rejected = false;
+  try {
+    buildArticleContext(blocksOf(2), { blockId: "other-article-block" });
+  } catch {
+    rejected = true;
   }
-});
-
-Deno.test("a bounded single-block anchor is included exactly once", () => {
-  const blocks = blocksOf(20).map((block) => ({
-    ...block,
-    content: `${block.content}:${"x".repeat(5_000)}`,
-  }));
-  const context = buildArticleContext(blocks, anchorAt(10));
-
-  assertEquals(context.split("[Block 11 | id-10]").length - 1, 1);
-  assert(context.length <= 12_000);
+  assert(rejected);
 });
 
 Deno.test("selection explanations reject a missing anchor before external calls", async () => {
@@ -200,6 +171,23 @@ Deno.test("selection explanations reject a missing anchor before external calls"
   assertEquals(events.map((event) => event.event), ["error"]);
   assertEquals(events[0].data.code, "invalid_anchor");
   assertEquals(calls, []);
+});
+
+Deno.test("reference explanations accept an empty question and send quote context", async () => {
+  const { calls, handler } = gatewayFixture();
+  const events = await responseEvents(await handler(companionRequest(
+    "selection_explain",
+    anchorAt(2),
+    [],
+    "",
+  )));
+
+  assertEquals(events.map((event) => event.event), ["started", "completed"]);
+  const modelCall = calls.find((call) => call.url.includes("api.deepseek.com"));
+  const messages = modelCall?.body?.messages as Array<{ role: string; content: string }>;
+  const prompt = messages.at(-1)?.content ?? "";
+  assert(prompt.includes("Quoted text:\nquoted selection"));
+  assert(!prompt.includes("Question:"));
 });
 
 Deno.test("non-anonymous callers are rejected before reservation and model calls", async () => {
@@ -253,6 +241,27 @@ Deno.test("validated DONE emits completed and settles known usage", async () => 
   const settlement = calls.find((call) => call.url.includes("settle_ai_companion_usage"));
   assertEquals(settlement?.body?.p_actual_output_tokens, 7);
   assertEquals(settlement?.body?.p_outcome, "completed");
+});
+
+Deno.test("model is fixed to deepseek-flash and receives full article plus history", async () => {
+  const { calls, handler } = gatewayFixture();
+  await responseEvents(await handler(companionRequest(
+    "question",
+    undefined,
+    [
+      { role: "user", content: "Earlier question" },
+      { role: "assistant", content: "Earlier answer" },
+    ],
+  )));
+
+  const modelCall = calls.find((call) => call.url.includes("api.deepseek.com"));
+  assertEquals(modelCall?.body?.model, "deepseek-flash");
+  assert(!("max_tokens" in (modelCall?.body ?? {})));
+  const messages = modelCall?.body?.messages as Array<{ role: string; content: string }>;
+  assert(messages[0].content.includes("block-0"));
+  assert(messages[0].content.includes("block-19"));
+  assertEquals(messages[1], { role: "user", content: "Earlier question" });
+  assertEquals(messages[2], { role: "assistant", content: "Earlier answer" });
 });
 
 Deno.test("a rejected durable reservation never calls DeepSeek", async () => {

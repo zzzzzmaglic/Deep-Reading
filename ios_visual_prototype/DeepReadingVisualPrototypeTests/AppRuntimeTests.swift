@@ -6,6 +6,98 @@ import XCTest
 
 @MainActor
 final class AppRuntimeTests: XCTestCase {
+    func testAICompanionSendsReferenceAndStreamsReply() async throws {
+        let repository = FixtureAICompanionRepository()
+        let controller = AICompanionController(repository: repository)
+        let articleID = UUID()
+        let startBlockID = UUID()
+        let endBlockID = UUID()
+        controller.beginSession(articleID: articleID)
+        controller.prepare(reference: AICompanionReference(
+            text: "被引用的原文",
+            anchor: AICompanionAnchor(startBlockId: startBlockID, endBlockId: endBlockID),
+            requestType: .selectionExplain
+        ))
+        controller.draft = "解释一下"
+
+        controller.send()
+        try await repository.waitForRequestCount(1)
+        repository.emit(.started, requestIndex: 0)
+        repository.emit(.delta("这是"), requestIndex: 0)
+        repository.emit(.delta("解释"), requestIndex: 0)
+        repository.emit(.completed, requestIndex: 0)
+        repository.finish(requestIndex: 0)
+        try await waitUntil { controller.isGenerating == false }
+
+        XCTAssertEqual(repository.requests[0].articleId, articleID)
+        XCTAssertEqual(repository.requests[0].requestType, .selectionExplain)
+        XCTAssertEqual(repository.requests[0].quotedText, "被引用的原文")
+        XCTAssertEqual(repository.requests[0].anchor?.startBlockId, startBlockID)
+        XCTAssertEqual(controller.messages[0].referenceText, "被引用的原文")
+        XCTAssertEqual(controller.messages[1].text, "这是解释")
+        XCTAssertEqual(controller.messages[1].state, .complete)
+    }
+
+    func testAICompanionStopKeepsPartialReplyAndNextRequestCarriesHistory() async throws {
+        let repository = FixtureAICompanionRepository()
+        let controller = AICompanionController(repository: repository)
+        controller.beginSession(articleID: UUID())
+        controller.draft = "第一个问题"
+        controller.send()
+        try await repository.waitForRequestCount(1)
+        repository.emit(.delta("部分回复"), requestIndex: 0)
+        try await waitUntil { controller.messages.last?.text == "部分回复" }
+
+        controller.stop()
+        XCTAssertEqual(controller.messages.last?.state, .stopped)
+        XCTAssertEqual(controller.messages.last?.text, "部分回复")
+
+        controller.draft = "继续追问"
+        controller.send()
+        try await repository.waitForRequestCount(2)
+        XCTAssertEqual(repository.requests[1].history, [
+            AICompanionHistoryMessage(role: .user, content: "第一个问题"),
+            AICompanionHistoryMessage(role: .assistant, content: "部分回复")
+        ])
+    }
+
+    func testAICompanionAllowsReferenceOnlySendAndKeepsBlankBubbleInHistory() async throws {
+        let repository = FixtureAICompanionRepository()
+        let controller = AICompanionController(repository: repository)
+        let startBlockID = UUID()
+        let endBlockID = UUID()
+        controller.beginSession(articleID: UUID())
+        controller.prepare(reference: AICompanionReference(
+            text: "被引用的原文",
+            anchor: AICompanionAnchor(startBlockId: startBlockID, endBlockId: endBlockID),
+            requestType: .highlightExplain
+        ))
+
+        XCTAssertTrue(controller.canSend)
+        controller.send()
+        try await repository.waitForRequestCount(1)
+
+        XCTAssertEqual(repository.requests[0].question, "")
+        XCTAssertEqual(repository.requests[0].requestType, .highlightExplain)
+        XCTAssertEqual(repository.requests[0].quotedText, "被引用的原文")
+        XCTAssertEqual(controller.messages[0].role, .user)
+        XCTAssertEqual(controller.messages[0].text, "")
+        XCTAssertEqual(controller.messages[0].referenceText, "被引用的原文")
+
+        repository.emit(.delta("引用解释"), requestIndex: 0)
+        repository.emit(.completed, requestIndex: 0)
+        repository.finish(requestIndex: 0)
+        try await waitUntil { controller.isGenerating == false }
+
+        controller.draft = "继续追问"
+        controller.send()
+        try await repository.waitForRequestCount(2)
+        XCTAssertEqual(repository.requests[1].history, [
+            AICompanionHistoryMessage(role: .user, content: "引用：被引用的原文"),
+            AICompanionHistoryMessage(role: .assistant, content: "引用解释")
+        ])
+    }
+
     func testReaderRegistersItsTextViewportForTheSystemTopScrollEdge() async throws {
         let articleID = UUID()
         let article = Article(
@@ -737,6 +829,16 @@ final class AppRuntimeTests: XCTestCase {
         )
         return textView
     }
+
+    private func waitUntil(
+        _ predicate: @escaping @MainActor () -> Bool
+    ) async throws {
+        for _ in 0..<100 {
+            if predicate() { return }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTFail("Timed out waiting for condition")
+    }
 }
 
 private enum FakeRuntimeError: Error { case bootstrapFailed }
@@ -776,6 +878,34 @@ private actor ReaderScreenFixtureAssetRepository: ReadingAssetRepository {
 }
 
 private enum FixtureError: Error { case unsupported }
+
+private final class FixtureAICompanionRepository: AICompanionStreaming, @unchecked Sendable {
+    private(set) var requests: [AICompanionRequest] = []
+    private var continuations: [AsyncThrowingStream<AICompanionStreamEvent, Error>.Continuation] = []
+
+    func stream(_ request: AICompanionRequest) -> AsyncThrowingStream<AICompanionStreamEvent, Error> {
+        requests.append(request)
+        return AsyncThrowingStream { continuation in
+            continuations.append(continuation)
+        }
+    }
+
+    func emit(_ event: AICompanionStreamEvent, requestIndex: Int) {
+        continuations[requestIndex].yield(event)
+    }
+
+    func finish(requestIndex: Int) {
+        continuations[requestIndex].finish()
+    }
+
+    func waitForRequestCount(_ count: Int) async throws {
+        for _ in 0..<100 {
+            if requests.count >= count, continuations.count >= count { return }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        throw FixtureError.unsupported
+    }
+}
 
 private struct StubReadingReportRemote: SupabaseReadingReportRemote {
     let response: SupabaseReadingReportResponse

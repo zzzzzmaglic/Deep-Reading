@@ -20,9 +20,7 @@ The `ai-companion` Edge Function requires these server-side values:
 | `SUPABASE_URL` | Supabase project URL; supplied automatically when hosted | `http://127.0.0.1:54321` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server-only article block reads and Auth validation | Local CLI service-role key |
 | `DEEPSEEK_API_KEY` | Server-only DeepSeek credential | Set through function secrets |
-| `DEEPSEEK_MODEL` | Streaming model name | `DeepSeek-V4-Pro` |
 | `AI_ENABLED` | Deployment feature switch | `true` or `false` |
-| `AI_MAX_OUTPUT_TOKENS` | Tokens reserved before each model call; maximum 4096 | `100` |
 | `AI_REQUESTS_PER_HOUR` | Per-anonymous-user hourly request limit | `20` |
 | `AI_GLOBAL_DAILY_TOKEN_BUDGET` | Shared daily completion-token budget | `10000` |
 | `AI_GLOBAL_WEEKLY_TOKEN_BUDGET` | Shared weekly completion-token budget | `20000` |
@@ -31,6 +29,24 @@ Never place `SUPABASE_SERVICE_ROLE_KEY` or `DEEPSEEK_API_KEY` in Flutter defines
 configuration, source control, screenshots, or client logs. Hosted values belong in Supabase Edge
 Function secrets. Local values belong in `supabase/.env.local`, which is ignored by the tracked root
 `.gitignore`.
+
+### AI companion function
+
+`ai-companion` always uses `deepseek-flash`. It does not read `DEEPSEEK_MODEL`, upgrade to a Pro
+model, or fall back to one. For every accepted request, the function loads the article title and all
+ordered article blocks from Supabase and supplies the complete article to DeepSeek; it does not
+truncate the article or trust article text supplied by the client.
+
+The Demo does not send `max_tokens` to DeepSeek, so it does not impose an application-level output
+length cap. A fixed internal reservation is still used for durable usage accounting; it does not
+truncate the generated response.
+
+The native Demo keeps the current conversation in memory while the reader remains open. Each
+request may include `quotedText`, an optional block-ID `anchor`, and up to 20 recent `history`
+messages. Selection and existing-highlight explanations require both a quote and an anchor. The
+microphone icon is visual only and the Demo neither requests microphone permission nor performs
+speech recognition. Dynamic recommended questions are intentionally outside the current Demo
+scope.
 
 ### Reading report function
 
@@ -109,12 +125,12 @@ Use `--ignore-health-check` only when Vector's Windows health check blocks start
 API, and Edge Runtime must still be available. `--no-verify-jwt` bypasses only the local Edge Runtime
 pre-check. The function independently validates the bearer token and anonymous identity.
 
-Send only `articleId`, `requestType`, `question`, and an optional block-ID anchor. Selection and
-highlight explanations require an anchor. Any client article text is ignored. An accepted response
-uses only `started`, `delta`, `completed`, and typed `error` SSE events. `completed` is emitted only
-after DeepSeek's validated `[DONE]`; cancellation, malformed data, in-band errors, and plain EOF are
-settled and end with `error` or a disconnected client. The function persists no AI session or
-history.
+Send `articleId`, `requestType`, `question`, optional `quotedText`, optional block-ID `anchor`, and
+the bounded recent `history`. Selection and highlight explanations require a quote and an anchor.
+Any client article text is ignored. An accepted response uses only `started`, `delta`, `completed`,
+and typed `error` SSE events. `completed` is emitted only after DeepSeek's validated `[DONE]`;
+cancellation, malformed data, in-band errors, and plain EOF are settled and end with `error` or a
+disconnected client. The function persists no AI session or history.
 
 Set `AI_ENABLED=false` to reject new model requests without rebuilding the client. Before a public
 Demo release, test anonymous rejection, hourly rejection, cross-user day/week exhaustion, stop and
