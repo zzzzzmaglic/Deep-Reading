@@ -4,6 +4,17 @@ import Foundation
 struct ReaderDependencies: @unchecked Sendable {
     let articleRepository: any ArticleRepository
     let readingAssetRepository: any ReadingAssetRepository
+    let readingReportGenerator: any ReadingReportGenerating
+
+    init(
+        articleRepository: any ArticleRepository,
+        readingAssetRepository: any ReadingAssetRepository,
+        readingReportGenerator: any ReadingReportGenerating = UnavailableReadingReportGenerator()
+    ) {
+        self.articleRepository = articleRepository
+        self.readingAssetRepository = readingAssetRepository
+        self.readingReportGenerator = readingReportGenerator
+    }
 }
 
 struct ReaderChromeState: Equatable {

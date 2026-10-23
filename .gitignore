@@ -19,6 +19,8 @@ venv/
 .idea/
 *.swp
 *.swo
+xcuserdata/
+*.xcuserstate
 
 # OS
 .DS_Store
@@ -50,3 +52,6 @@ ios_visual_prototype/DeepReadingVisualPrototype/Configuration/Debug.xcconfig
 
 # Server-only local Supabase Edge Function secrets
 supabase/.env.local
+supabase/.branches/
+supabase/.temp/
+supabase/.debug/

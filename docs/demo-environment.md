@@ -32,6 +32,43 @@ configuration, source control, screenshots, or client logs. Hosted values belong
 Function secrets. Local values belong in `supabase/.env.local`, which is ignored by the tracked root
 `.gitignore`.
 
+### Reading report function
+
+`reading-report` has a separate, fixed model contract: it always uses `deepseek-flash` and never
+reads `DEEPSEEK_MODEL`, upgrades to a Pro model, or falls back to one. The function loads the full
+article and the caller's assets server-side. It sends DeepSeek the full article plus exactly one
+non-empty note selected by visible note-body character count; linked-asset highlight text is not
+part of that count or the model evidence. When no valid note exists, it returns an unavailable
+result without contacting DeepSeek.
+
+The current prototype leaves reading-report usage accounting disabled, so report generation is not
+blocked by the shared hourly, daily, or weekly AI budgets. Set the server-only Edge Function value
+`READING_REPORT_USAGE_LIMITS_ENABLED=true` to opt this function back into the existing durable
+reservation and settlement policy. This switch does not change `ai-companion` limits. When enabled,
+the reservation covers up to two analysis calls (one protocol retry) and one writing call.
+
+The Demo owner has approved this transfer for the four bundled articles and their selected note.
+Do not extend that approval to additional notes, raw highlights, other articles, or unrelated user
+data. Store production credentials only as Supabase function secrets. For local verification,
+inject the credential into the function process environment without committing the value or a
+credential file.
+
+For local report inspection, the function emits a `reading_report_writing_prompt_capture` JSON log
+immediately before the second DeepSeek call. Local loopback/Kong runtimes enable this automatically;
+hosted deployments do not. Set `READING_REPORT_CAPTURE_WRITING_PROMPT=true` to enable it explicitly
+or `false` to disable it. The capture contains the exact model parameters and final two-message
+request sent to `deepseek-flash`: the fully assembled system prompt plus the user prompt. It does not
+contain the API key. Because the user prompt intentionally contains the authorized full article and
+selected note, keep captures local and never commit them.
+
+Run `supabase/scripts/export-reading-report-writing-prompts.sh` while using the Simulator. It follows
+the current local Edge Runtime container and automatically extracts only the final assembled system
+message of the second call into a readable `*_writing-system-prompt.md` file under
+`supabase/.debug/reading-report/`. The Markdown contains no JSON envelope, request metadata, user
+message, quoting, or escaped newlines. The exporter reconnects when the Edge Runtime container
+restarts. Use the `--once` argument to export prompts already present in the current container log
+and exit.
+
 ## Durable quota policy
 
 PostgreSQL is the source of truth for abuse control. `reserve_ai_companion_usage` atomically locks

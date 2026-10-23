@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "strict": true
+  },
+  "tasks": {
+    "test": "deno test logic_test.ts pipeline_test.ts index_test.ts"
+  }
+}

@@ -7,6 +7,7 @@ import UIKit
 /// the card.
 struct ReadingAssetCardUIKitPresenter<Item: Identifiable, PresentedContent: View>: UIViewControllerRepresentable {
     @Binding var item: Item?
+    let transitionStyle: ReadingOverlayTransitionStyle
     let content: (Item) -> PresentedContent
 
     func makeCoordinator() -> Coordinator {
@@ -47,6 +48,7 @@ struct ReadingAssetCardUIKitPresenter<Item: Identifiable, PresentedContent: View
         weak var anchorController: ReadingAssetPresentationAnchorController?
 
         private weak var presentedController: UIViewController?
+        private weak var presentedHostingController: UIHostingController<PresentedContent>?
         private var presentedID: AnyHashable?
         private var transitioningDelegate: ReadingAssetCardTransitioningDelegate?
         private var isPresenting = false
@@ -62,7 +64,11 @@ struct ReadingAssetCardUIKitPresenter<Item: Identifiable, PresentedContent: View
 
             if let item = parent.item {
                 let itemID = AnyHashable(item.id)
-                guard presentedID != itemID, !isPresenting, !isDismissing else { return }
+                if presentedID == itemID {
+                    presentedHostingController?.rootView = parent.content(item)
+                    return
+                }
+                guard !isPresenting, !isDismissing else { return }
 
                 if presentedController != nil {
                     dismissPresentedController(animated: false) { [weak self] in
@@ -72,7 +78,7 @@ struct ReadingAssetCardUIKitPresenter<Item: Identifiable, PresentedContent: View
                     present(item, id: itemID, from: anchorController)
                 }
             } else if presentedController != nil, !isDismissing {
-                dismissPresentedController(animated: true)
+                dismissPresentedController(animated: parent.transitionStyle.animatesDismissal)
             }
         }
 
@@ -103,10 +109,11 @@ struct ReadingAssetCardUIKitPresenter<Item: Identifiable, PresentedContent: View
             hostingController.modalPresentationStyle = .custom
             hostingController.modalPresentationCapturesStatusBarAppearance = false
 
-            let transitioningDelegate = ReadingAssetCardTransitioningDelegate()
+            let transitioningDelegate = ReadingAssetCardTransitioningDelegate(style: parent.transitionStyle)
             hostingController.transitioningDelegate = transitioningDelegate
             self.transitioningDelegate = transitioningDelegate
             presentedController = hostingController
+            presentedHostingController = hostingController
             presentedID = id
             isPresenting = true
 
@@ -138,6 +145,7 @@ struct ReadingAssetCardUIKitPresenter<Item: Identifiable, PresentedContent: View
 
         private func clearPresentedState() {
             presentedController = nil
+            presentedHostingController = nil
             presentedID = nil
             transitioningDelegate = nil
             isPresenting = false
@@ -158,6 +166,22 @@ struct ReadingAssetCardUIKitPresenter<Item: Identifiable, PresentedContent: View
     }
 }
 
+enum ReadingOverlayTransitionStyle: Equatable {
+    case assetCard
+    case readingReport
+
+    var dimmingOpacity: CGFloat {
+        switch self {
+        case .assetCard: 0.16
+        case .readingReport: 0.20
+        }
+    }
+
+    var animatesDismissal: Bool {
+        self == .assetCard
+    }
+}
+
 final class ReadingAssetPresentationAnchorController: UIViewController {
     var onReady: (() -> Void)?
 
@@ -168,6 +192,12 @@ final class ReadingAssetPresentationAnchorController: UIViewController {
 }
 
 private final class ReadingAssetCardTransitioningDelegate: NSObject, UIViewControllerTransitioningDelegate {
+    private let style: ReadingOverlayTransitionStyle
+
+    init(style: ReadingOverlayTransitionStyle) {
+        self.style = style
+    }
+
     func presentationController(
         forPresented presented: UIViewController,
         presenting: UIViewController?,
@@ -175,7 +205,8 @@ private final class ReadingAssetCardTransitioningDelegate: NSObject, UIViewContr
     ) -> UIPresentationController? {
         ReadingAssetCardPresentationController(
             presentedViewController: presented,
-            presenting: presenting
+            presenting: presenting,
+            style: style
         )
     }
 
@@ -184,15 +215,16 @@ private final class ReadingAssetCardTransitioningDelegate: NSObject, UIViewContr
         presenting: UIViewController,
         source: UIViewController
     ) -> UIViewControllerAnimatedTransitioning? {
-        ReadingAssetCardTransitionAnimator(isPresenting: true)
+        ReadingAssetCardTransitionAnimator(isPresenting: true, style: style)
     }
 
     func animationController(forDismissed dismissed: UIViewController) -> UIViewControllerAnimatedTransitioning? {
-        ReadingAssetCardTransitionAnimator(isPresenting: false)
+        ReadingAssetCardTransitionAnimator(isPresenting: false, style: style)
     }
 }
 
 private final class ReadingAssetCardPresentationController: UIPresentationController {
+    private let style: ReadingOverlayTransitionStyle
     private let dimmingView: UIView = {
         let view = UIView()
         view.backgroundColor = .black
@@ -201,6 +233,18 @@ private final class ReadingAssetCardPresentationController: UIPresentationContro
         view.accessibilityElementsHidden = true
         return view
     }()
+
+    init(
+        presentedViewController: UIViewController,
+        presenting presentingViewController: UIViewController?,
+        style: ReadingOverlayTransitionStyle
+    ) {
+        self.style = style
+        super.init(
+            presentedViewController: presentedViewController,
+            presenting: presentingViewController
+        )
+    }
 
     override var frameOfPresentedViewInContainerView: CGRect {
         containerView?.bounds ?? .zero
@@ -218,7 +262,8 @@ private final class ReadingAssetCardPresentationController: UIPresentationContro
         containerView.insertSubview(dimmingView, at: 0)
 
         let changes = { [weak self] in
-            self?.dimmingView.alpha = 0.16
+            guard let self else { return }
+            self.dimmingView.alpha = self.style.dimmingOpacity
         }
         if let coordinator = presentedViewController.transitionCoordinator {
             coordinator.animate(alongsideTransition: { _ in changes() })
@@ -256,16 +301,28 @@ private final class ReadingAssetCardPresentationController: UIPresentationContro
 
 private final class ReadingAssetCardTransitionAnimator: NSObject, UIViewControllerAnimatedTransitioning {
     private let isPresenting: Bool
+    private let style: ReadingOverlayTransitionStyle
 
-    init(isPresenting: Bool) {
+    init(isPresenting: Bool, style: ReadingOverlayTransitionStyle) {
         self.isPresenting = isPresenting
+        self.style = style
     }
 
     func transitionDuration(using transitionContext: UIViewControllerContextTransitioning?) -> TimeInterval {
-        isPresenting ? 0.42 : 0.30
+        switch style {
+        case .assetCard:
+            isPresenting ? 0.42 : 0.30
+        case .readingReport:
+            isPresenting ? 0.22 : 0
+        }
     }
 
     func animateTransition(using transitionContext: UIViewControllerContextTransitioning) {
+        if style == .readingReport {
+            animateImmediateReportTransition(using: transitionContext)
+            return
+        }
+
         let containerView = transitionContext.containerView
         let duration = transitionDuration(using: transitionContext)
 
@@ -320,6 +377,38 @@ private final class ReadingAssetCardTransitionAnimator: NSObject, UIViewControll
             }
         }
     }
+
+    private func animateImmediateReportTransition(
+        using transitionContext: UIViewControllerContextTransitioning
+    ) {
+        if isPresenting {
+            guard let presentedController = transitionContext.viewController(forKey: .to),
+                  let presentedView = transitionContext.view(forKey: .to) else {
+                transitionContext.completeTransition(false)
+                return
+            }
+            presentedView.frame = transitionContext.finalFrame(for: presentedController)
+            presentedView.transform = .identity
+            transitionContext.containerView.addSubview(presentedView)
+
+            // The report itself appears in its final state immediately. Keep
+            // the transition context alive only while UIPresentationController
+            // fades the independent dimming view, matching the asset-card
+            // backdrop without reintroducing a bottom-sheet translation.
+            UIView.animate(
+                withDuration: transitionDuration(using: transitionContext),
+                delay: 0,
+                options: [.curveEaseOut, .allowUserInteraction]
+            ) {
+                presentedView.alpha = 1
+            } completion: { _ in
+                transitionContext.completeTransition(!transitionContext.transitionWasCancelled)
+            }
+        } else {
+            transitionContext.view(forKey: .from)?.removeFromSuperview()
+            transitionContext.completeTransition(!transitionContext.transitionWasCancelled)
+        }
+    }
 }
 
 extension View {
@@ -328,9 +417,29 @@ extension View {
         @ViewBuilder content: @escaping (Item) -> PresentedContent
     ) -> some View {
         background {
-            ReadingAssetCardUIKitPresenter(item: item, content: content)
+            ReadingAssetCardUIKitPresenter(
+                item: item,
+                transitionStyle: .assetCard,
+                content: content
+            )
                 .frame(width: 0, height: 0)
                 .accessibilityHidden(true)
+        }
+    }
+
+
+    func readingReportPresentation<Item: Identifiable, PresentedContent: View>(
+        item: Binding<Item?>,
+        @ViewBuilder content: @escaping (Item) -> PresentedContent
+    ) -> some View {
+        background {
+            ReadingAssetCardUIKitPresenter(
+                item: item,
+                transitionStyle: .readingReport,
+                content: content
+            )
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
         }
     }
 }

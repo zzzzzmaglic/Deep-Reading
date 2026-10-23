@@ -310,6 +310,7 @@ final class ReaderSelectionActionTests: XCTestCase {
             highlightedAnchorRange: { _ in nil },
             onSelectionAction: { _, _ in },
             onHighlightedTextAction: { _, _ in },
+            onCompleteReading: {},
             showsBottomEdgeEffect: true
         )
         let nativeCoordinator = readerTextView.makeCoordinator()

@@ -213,6 +213,173 @@ final class AppRuntimeTests: XCTestCase {
         )
     }
 
+    func testReadingReportUsesTheFourFixedDemoDurationsAndFigmaBodyGeometry() {
+        let articleIDs = [
+            UUID(uuidString: "10000000-0000-0000-0000-000000000001")!,
+            UUID(uuidString: "10000000-0000-0000-0000-000000000004")!,
+            UUID(uuidString: "10000000-0000-0000-0000-000000000005")!,
+            UUID(uuidString: "10000000-0000-0000-0000-000000000006")!
+        ]
+
+        XCTAssertEqual(articleIDs.map { ReadingReportMetrics.focusMinutes(for: $0) }, [40, 20, 10, 36])
+        XCTAssertEqual(ReadingReportLayout.cardFrame, CGRect(x: 38, y: 215, width: 317, height: 381))
+        XCTAssertEqual(ReadingReportLayout.bodyFrame, CGRect(x: 21, y: 109, width: 273, height: 208))
+        XCTAssertEqual(ReadingReportLayout.finishButtonOffset, CGPoint(x: 137, y: 327))
+        XCTAssertEqual(
+            ReadingReportLayout.cardFrame.height
+                - ReadingReportLayout.finishButtonOffset.y
+                - 44,
+            10
+        )
+        XCTAssertEqual(
+            ReadingReportLayout.finishButtonOffset.y
+                - ReadingReportLayout.bodyFrame.maxY,
+            10
+        )
+        XCTAssertEqual(ReadingReportLayout.bodyFontSize, 13)
+        XCTAssertEqual(ReadingReportLayout.bodyLineHeight, 20)
+    }
+
+    func testReadingReportBodyUsesItsFigmaWidthAndWrapsChineseText() throws {
+        let report = ReadingReportBodyText(
+            text: "Edison，早上读完这篇四十分钟的公司简史，你抓住了一条很实在的线索。你从周报自动化切入，注意到省下的半小时又被顺手接来的任务填满，进而追问效率收益到底归谁。"
+        )
+        .frame(
+            width: ReadingReportLayout.bodyFrame.width,
+            height: ReadingReportLayout.bodyFrame.height
+        )
+        let controller = UIHostingController(rootView: report)
+        let window = try makeWindow(rootViewController: controller)
+        defer { window.isHidden = true }
+        controller.view.frame = CGRect(
+            origin: .zero,
+            size: ReadingReportLayout.bodyFrame.size
+        )
+        controller.loadViewIfNeeded()
+        controller.view.layoutIfNeeded()
+
+        let textView = try XCTUnwrap(findTextView(in: controller.view))
+        textView.layoutIfNeeded()
+        textView.layoutManager.ensureLayout(for: textView.textContainer)
+        var lineCount = 0
+        textView.layoutManager.enumerateLineFragments(
+            forGlyphRange: NSRange(location: 0, length: textView.layoutManager.numberOfGlyphs)
+        ) { _, _, _, _, _ in
+            lineCount += 1
+        }
+
+        XCTAssertEqual(textView.bounds.width, ReadingReportLayout.bodyFrame.width, accuracy: 0.5)
+        XCTAssertEqual(textView.textContainer.lineBreakMode, .byWordWrapping)
+        XCTAssertEqual(textView.textStorage.attribute(
+            .paragraphStyle,
+            at: 0,
+            effectiveRange: nil
+        ) as? NSParagraphStyle != nil, true)
+        XCTAssertGreaterThan(lineCount, 1)
+    }
+
+    func testReadingReportBodyCollapsesBlankLinesBetweenThreeParts() throws {
+        let report = ReadingReportBodyText(text: "第一部分。\n\n第二部分。\n   \n第三部分。")
+            .frame(
+                width: ReadingReportLayout.bodyFrame.width,
+                height: ReadingReportLayout.bodyFrame.height
+            )
+        let controller = UIHostingController(rootView: report)
+        let window = try makeWindow(rootViewController: controller)
+        defer { window.isHidden = true }
+        controller.view.frame = CGRect(origin: .zero, size: ReadingReportLayout.bodyFrame.size)
+        controller.loadViewIfNeeded()
+        controller.view.layoutIfNeeded()
+
+        let textView = try XCTUnwrap(findTextView(in: controller.view))
+        XCTAssertEqual(textView.text, "第一部分。\n第二部分。\n第三部分。")
+        let paragraph = try XCTUnwrap(
+            textView.textStorage.attribute(.paragraphStyle, at: 0, effectiveRange: nil)
+                as? NSParagraphStyle
+        )
+        XCTAssertEqual(paragraph.paragraphSpacing, 0)
+        XCTAssertEqual(paragraph.paragraphSpacingBefore, 0)
+        XCTAssertTrue(paragraph.lineBreakStrategy.contains(.pushOut))
+    }
+
+    func testReadingReportBodyOnlyScrollsWhenContentOverflows() throws {
+        let shortBody = try makeReadingReportBodyTextView(text: "第一部分。\n第二部分。\n第三部分。")
+        XCTAssertFalse(shortBody.textView.isScrollEnabled)
+        XCTAssertFalse(shortBody.textView.showsVerticalScrollIndicator)
+        XCTAssertTrue(shortBody.indicator.isHidden)
+
+        let longText = Array(repeating: "这是一段用于验证阅读报告正文超出固定区域后能够继续向下滑动查看的内容。", count: 24)
+            .joined()
+        let longBody = try makeReadingReportBodyTextView(text: longText)
+        XCTAssertTrue(longBody.textView.isScrollEnabled)
+        XCTAssertFalse(longBody.textView.showsVerticalScrollIndicator)
+        XCTAssertFalse(longBody.indicator.isHidden)
+        XCTAssertGreaterThan(longBody.textView.contentSize.height, longBody.textView.bounds.height)
+        XCTAssertGreaterThan(longBody.indicator.frame.minX, longBody.textView.frame.maxX)
+    }
+
+    func testReadingReportGeneratorMapsGeneratedAndUnavailableResponses() async throws {
+        let articleID = UUID()
+        let generated = SupabaseReadingReportGenerator(
+            remote: StubReadingReportRemote(
+                response: SupabaseReadingReportResponse(
+                    status: "generated",
+                    body: "  一段有依据的阅读报告。\n",
+                    message: nil
+                )
+            )
+        )
+        let unavailable = SupabaseReadingReportGenerator(
+            remote: StubReadingReportRemote(
+                response: SupabaseReadingReportResponse(
+                    status: "unavailable",
+                    body: nil,
+                    message: "当前没有可用于生成阅读报告的笔记。"
+                )
+            )
+        )
+
+        let generatedResult = try await generated.generateReport(articleID: articleID)
+        let unavailableResult = try await unavailable.generateReport(articleID: articleID)
+        XCTAssertEqual(generatedResult, .generated("一段有依据的阅读报告。"))
+        XCTAssertEqual(
+            unavailableResult,
+            .unavailable("当前没有可用于生成阅读报告的笔记。")
+        )
+    }
+
+    func testReadingReportPresentationKeepsIdentityWhileBodyLoads() {
+        let articleID = UUID()
+        let loading = ReadingReportPresentation(
+            articleID: articleID,
+            assetCount: 3,
+            bodyState: .loading
+        )
+        let completed = loading.with(bodyState: .generated("报告正文"))
+
+        XCTAssertEqual(completed.id, loading.id)
+        XCTAssertEqual(completed.bodyState, .generated("报告正文"))
+        XCTAssertEqual(completed.assetCount, 3)
+    }
+
+    func testReaderCompletionControlUsesFigmaSizeAndInvokesItsAction() {
+        let textView = ReaderTextView.ReaderViewportTextView(frame: .zero, textContainer: nil)
+        var completed = false
+        textView.onCompleteReading = { completed = true }
+
+        textView.completionButton.sendActions(for: .touchUpInside)
+
+        XCTAssertTrue(completed)
+        XCTAssertEqual(ReaderCompletionControlLayout.size, 47)
+    }
+
+    func testReadingReportUsesImmediateContentAndAssetCardStyleDimming() {
+        XCTAssertEqual(ReadingOverlayTransitionStyle.readingReport.dimmingOpacity, 0.20)
+        XCTAssertFalse(ReadingOverlayTransitionStyle.readingReport.animatesDismissal)
+        XCTAssertEqual(ReadingOverlayTransitionStyle.assetCard.dimmingOpacity, 0.16)
+        XCTAssertTrue(ReadingOverlayTransitionStyle.assetCard.animatesDismissal)
+    }
+
     func testKnowledgeInteractionIdentifiersUseStableUUIDs() {
         let id = UUID(uuidString: "20000000-0000-0000-0000-000000000001")!
 
@@ -384,6 +551,7 @@ final class AppRuntimeTests: XCTestCase {
             highlightedAnchorRange: { _ in nil },
             onSelectionAction: { _, _ in },
             onHighlightedTextAction: { _, _ in },
+            onCompleteReading: {},
             showsBottomEdgeEffect: true
         )
         let controller = UIHostingController(rootView: reader.frame(width: 393, height: 852))
@@ -418,6 +586,37 @@ final class AppRuntimeTests: XCTestCase {
         )
     }
 
+    private func makeReadingReportBodyTextView(text: String) throws -> (
+        textView: UITextView,
+        indicator: UIView
+    ) {
+        let report = ReadingReportBodyText(text: text)
+            .frame(
+                width: ReadingReportLayout.bodyFrame.width,
+                height: ReadingReportLayout.bodyFrame.height
+            )
+        let controller = UIHostingController(rootView: report)
+        let window = try makeWindow(rootViewController: controller)
+        defer { window.isHidden = true }
+        controller.view.frame = CGRect(origin: .zero, size: ReadingReportLayout.bodyFrame.size)
+        controller.loadViewIfNeeded()
+        controller.view.setNeedsLayout()
+        controller.view.layoutIfNeeded()
+
+        let textView = try XCTUnwrap(findTextView(in: controller.view))
+        for _ in 0 ..< 3 {
+            textView.setNeedsLayout()
+            textView.layoutIfNeeded()
+        }
+        let indicator = try XCTUnwrap(
+            findView(
+                accessibilityIdentifier: "reading-report-body-scroll-indicator",
+                in: controller.view
+            )
+        )
+        return (textView, indicator)
+    }
+
     private func configuration() throws -> SupabaseRuntimeConfiguration {
         try SupabaseRuntimeConfiguration.load(values: ["SUPABASE_URL": "http://127.0.0.1:54321", "SUPABASE_ANON_KEY": "test-key"])
     }
@@ -441,6 +640,16 @@ final class AppRuntimeTests: XCTestCase {
         if let textView = view as? UITextView { return textView }
         for subview in view.subviews {
             if let textView = findTextView(in: subview) { return textView }
+        }
+        return nil
+    }
+
+    private func findView(accessibilityIdentifier: String, in view: UIView) -> UIView? {
+        if view.accessibilityIdentifier == accessibilityIdentifier { return view }
+        for subview in view.subviews {
+            if let match = findView(accessibilityIdentifier: accessibilityIdentifier, in: subview) {
+                return match
+            }
         }
         return nil
     }
@@ -567,6 +776,15 @@ private actor ReaderScreenFixtureAssetRepository: ReadingAssetRepository {
 }
 
 private enum FixtureError: Error { case unsupported }
+
+private struct StubReadingReportRemote: SupabaseReadingReportRemote {
+    let response: SupabaseReadingReportResponse
+
+    func generate(articleID: UUID) async throws -> SupabaseReadingReportResponse {
+        response
+    }
+}
+
 @MainActor private final class AppRuntimeRenderRecorder {
     private(set) var elements: [AppRootRenderedElement] = []
     func record(_ element: AppRootRenderedElement) { elements.append(element) }

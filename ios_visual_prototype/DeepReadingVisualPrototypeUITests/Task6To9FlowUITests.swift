@@ -196,11 +196,51 @@ final class Task6To9FlowUITests: XCTestCase {
         )
     }
 
+    func testArticleCompletionPresentsReportAndReturnsToItsOrigin() throws {
+        let app = try launchReaderWithoutSeeding()
+        let reader = app.textViews["reader-text-view"]
+        XCTAssertTrue(reader.waitForExistence(timeout: 12))
+
+        let completion = app.buttons["reader-complete-reading"]
+        for _ in 0 ..< 16 where !completion.isHittable {
+            reader.swipeUp(velocity: .fast)
+        }
+        XCTAssertTrue(completion.waitForExistence(timeout: 3))
+        XCTAssertTrue(completion.isHittable, "完成阅读按钮必须作为文章末尾的真实滚动内容出现。")
+        completion.tap()
+
+        let report = app.otherElements["reading-report-overlay"]
+        XCTAssertTrue(report.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.textViews["reading-report-body-frame"].exists)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "AI reading report"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+
+        let finish = app.buttons["reading-report-finish"]
+        XCTAssertTrue(finish.isHittable)
+        finish.tap()
+
+        XCTAssertTrue(report.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["knowledge-group-collections"].waitForExistence(timeout: 8))
+    }
+
     private func launchSeededReader() throws -> XCUIApplication {
         let app = XCUIApplication()
         app.terminate()
         app.launchArguments.append("-ui-test-open-local-seed-reader")
         app.launchArguments.append("-ui-test-seed-highlight")
+        app.launch()
+        if app.otherElements["app-root-configuration-error"].waitForExistence(timeout: 3) {
+            throw XCTSkip("Local Supabase configuration was not supplied to the built app.")
+        }
+        return app
+    }
+
+    private func launchReaderWithoutSeeding() throws -> XCUIApplication {
+        let app = XCUIApplication()
+        app.terminate()
+        app.launchArguments.append("-ui-test-open-local-seed-reader")
         app.launch()
         if app.otherElements["app-root-configuration-error"].waitForExistence(timeout: 3) {
             throw XCTSkip("Local Supabase configuration was not supplied to the built app.")

@@ -7,9 +7,11 @@ struct ReaderScreen: View {
     let route: ReaderRoute
     let dependencies: ReaderDependencies
     let onOpenSummary: (ReaderRoute) -> Void
+    let onFinishReading: () -> Void
     let assetRefreshRevision: Int
 
     @StateObject private var coordinator: ReaderCoordinator
+    @State private var readingReport: ReadingReportPresentation?
 
     private struct ViewportIdentity: Hashable {
         let route: ReaderRoute
@@ -20,11 +22,13 @@ struct ReaderScreen: View {
         route: ReaderRoute,
         dependencies: ReaderDependencies,
         onOpenSummary: @escaping (ReaderRoute) -> Void = { _ in },
+        onFinishReading: @escaping () -> Void = {},
         assetRefreshRevision: Int = 0
     ) {
         self.route = route
         self.dependencies = dependencies
         self.onOpenSummary = onOpenSummary
+        self.onFinishReading = onFinishReading
         self.assetRefreshRevision = assetRefreshRevision
         _coordinator = StateObject(wrappedValue: ReaderCoordinator(dependencies: dependencies))
     }
@@ -78,6 +82,12 @@ struct ReaderScreen: View {
             }
         }
         .preferredColorScheme(.light)
+        .readingReportPresentation(item: $readingReport) { presentation in
+            ReadingReportOverlay(
+                presentation: presentation,
+                onFinish: finishReading
+            )
+        }
         .readingAssetCardPresentation(item: assetCardPresentation) { presentation in
             ReadingAssetCard(
                 draft: presentation.draft,
@@ -164,6 +174,9 @@ struct ReaderScreen: View {
                     await coordinator.performHighlightedTextAction(anchor, action: action)
                 }
             },
+            onCompleteReading: {
+                beginReadingReport(articleID: article.id)
+            },
             showsBottomEdgeEffect: coordinator.chromeIsVisible
         )
         .id(ViewportIdentity(
@@ -246,6 +259,390 @@ struct ReaderScreen: View {
         )
     }
 
+    private func finishReading() {
+        readingReport = nil
+        DispatchQueue.main.async {
+            onFinishReading()
+        }
+    }
+
+    private func beginReadingReport(articleID: UUID) {
+        coordinator.showChrome()
+        readingReport = ReadingReportPresentation(
+            articleID: articleID,
+            assetCount: coordinator.assets.count,
+            bodyState: .loading
+        )
+
+        Task { @MainActor in
+            let bodyState: ReadingReportBodyState
+            do {
+                switch try await dependencies.readingReportGenerator.generateReport(articleID: articleID) {
+                case let .generated(body):
+                    bodyState = .generated(body)
+                case let .unavailable(message):
+                    bodyState = .unavailable(message)
+                }
+            } catch {
+                bodyState = .failed("阅读报告暂时无法生成，请稍后再试。")
+            }
+
+            guard let current = readingReport, current.articleID == articleID else { return }
+            readingReport = current.with(bodyState: bodyState)
+        }
+    }
+
+}
+
+enum ReadingReportBodyState: Equatable {
+    case loading
+    case generated(String)
+    case unavailable(String)
+    case failed(String)
+
+    var text: String? {
+        switch self {
+        case .loading:
+            nil
+        case let .generated(text), let .unavailable(text), let .failed(text):
+            text
+        }
+    }
+}
+
+struct ReadingReportPresentation: Identifiable, Equatable {
+    let articleID: UUID
+    let focusMinutes: Int
+    let assetCount: Int
+    let conversationCount: Int
+    let bodyState: ReadingReportBodyState
+
+    var id: UUID { articleID }
+
+    init(
+        articleID: UUID,
+        assetCount: Int,
+        bodyState: ReadingReportBodyState = .loading
+    ) {
+        self.articleID = articleID
+        focusMinutes = ReadingReportMetrics.focusMinutes(for: articleID)
+        self.assetCount = min(max(assetCount, 0), 99)
+        conversationCount = 10
+        self.bodyState = bodyState
+    }
+
+    func with(bodyState: ReadingReportBodyState) -> ReadingReportPresentation {
+        ReadingReportPresentation(
+            articleID: articleID,
+            assetCount: assetCount,
+            bodyState: bodyState
+        )
+    }
+}
+
+enum ReadingReportMetrics {
+    private static let fixedFocusMinutes: [UUID: Int] = [
+        UUID(uuidString: "10000000-0000-0000-0000-000000000001")!: 40,
+        UUID(uuidString: "10000000-0000-0000-0000-000000000004")!: 20,
+        UUID(uuidString: "10000000-0000-0000-0000-000000000005")!: 10,
+        UUID(uuidString: "10000000-0000-0000-0000-000000000006")!: 36
+    ]
+
+    static func focusMinutes(for articleID: UUID) -> Int {
+        fixedFocusMinutes[articleID] ?? 0
+    }
+}
+
+enum ReadingReportLayout {
+    static let referenceCanvas = CGSize(width: 393, height: 852)
+    static let cardFrame = CGRect(x: 38, y: 215, width: 317, height: 381)
+    static let bodyFrame = CGRect(x: 21, y: 109, width: 273, height: 208)
+    static let finishButtonOffset = CGPoint(x: 137, y: 327)
+    static let bodyFontSize: CGFloat = 13
+    static let bodyLineHeight: CGFloat = 20
+}
+
+private struct ReadingReportOverlay: View {
+    let presentation: ReadingReportPresentation
+    let onFinish: () -> Void
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .topLeading) {
+                reportCard
+                    .position(
+                        x: proxy.size.width / 2,
+                        y: max(0, (proxy.size.height - ReadingReportLayout.referenceCanvas.height) / 2)
+                            + ReadingReportLayout.cardFrame.midY
+                    )
+            }
+        }
+        .ignoresSafeArea()
+        .accessibilityIdentifier("reading-report-overlay")
+    }
+
+    private var reportCard: some View {
+        ZStack(alignment: .topLeading) {
+            Color(red: 0.976, green: 0.976, blue: 0.984)
+
+            metric(
+                label: "专注时长",
+                value: presentation.focusMinutes,
+                suffix: "min"
+            )
+            .frame(width: 82)
+            .position(x: 64, y: 45)
+
+            metric(
+                label: "划线笔记",
+                value: presentation.assetCount,
+                suffix: "处"
+            )
+            .frame(width: 82)
+            .position(x: 159, y: 45)
+
+            metric(
+                label: "深度对话",
+                value: presentation.conversationCount,
+                suffix: "次"
+            )
+            .frame(width: 82)
+            .position(x: 254, y: 45)
+
+            Text("“从殖民空间，到殖民时间”")
+                .font(.system(size: 16, weight: .bold))
+                .lineLimit(1)
+                .frame(width: 273, height: 21, alignment: .leading)
+                .offset(x: 22, y: 80)
+
+            Group {
+                if let text = presentation.bodyState.text {
+                    ReadingReportBodyText(text: text)
+                } else {
+                    ProgressView("正在生成阅读报告…")
+                        .font(.system(size: ReadingReportLayout.bodyFontSize))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .frame(
+                width: ReadingReportLayout.bodyFrame.width,
+                height: ReadingReportLayout.bodyFrame.height
+            )
+            .overlay {
+                Rectangle()
+                    .stroke(Color.blue, lineWidth: 1)
+            }
+            .offset(
+                x: ReadingReportLayout.bodyFrame.minX,
+                y: ReadingReportLayout.bodyFrame.minY
+            )
+            .accessibilityIdentifier("reading-report-body-frame")
+
+            Button(action: onFinish) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .glassEffect(.regular.tint(.blue).interactive(), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .frame(width: 44, height: 44)
+            .offset(
+                x: ReadingReportLayout.finishButtonOffset.x,
+                y: ReadingReportLayout.finishButtonOffset.y
+            )
+            .accessibilityLabel("完成并返回")
+            .accessibilityIdentifier("reading-report-finish")
+        }
+        .frame(
+            width: ReadingReportLayout.cardFrame.width,
+            height: ReadingReportLayout.cardFrame.height
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .shadow(color: .black.opacity(0.25), radius: 7, x: 0, y: 4)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("reading-report-card")
+    }
+
+    private func metric(label: String, value: Int, suffix: String) -> some View {
+        VStack(spacing: 1) {
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundStyle(Color(red: 0.431, green: 0.431, blue: 0.451))
+
+            HStack(alignment: .lastTextBaseline, spacing: 2) {
+                Text(String(value))
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(Color(uiColor: .systemBlue))
+                Text(suffix)
+                    .font(.system(size: 8))
+                    .foregroundStyle(Color(red: 0.431, green: 0.431, blue: 0.451))
+            }
+        }
+    }
+}
+
+struct ReadingReportBodyText: UIViewRepresentable {
+    let text: String
+
+    func makeUIView(context: Context) -> ReadingReportBodyContainerView {
+        let view = ReadingReportBodyContainerView()
+        let textView = view.textView
+        textView.backgroundColor = .clear
+        textView.isEditable = false
+        textView.isSelectable = false
+        textView.isScrollEnabled = false
+        textView.showsVerticalScrollIndicator = false
+        textView.showsHorizontalScrollIndicator = false
+        textView.textContainerInset = .zero
+        textView.textContainer.lineFragmentPadding = 0
+        textView.textContainer.widthTracksTextView = true
+        textView.textContainer.heightTracksTextView = false
+        textView.textContainer.lineBreakMode = .byWordWrapping
+        textView.alwaysBounceVertical = false
+        textView.alwaysBounceHorizontal = false
+        textView.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return view
+    }
+
+    func sizeThatFits(
+        _ proposal: ProposedViewSize,
+        uiView: ReadingReportBodyContainerView,
+        context: Context
+    ) -> CGSize? {
+        guard let width = proposal.width, let height = proposal.height else { return nil }
+        return CGSize(width: width, height: height)
+    }
+
+    func updateUIView(_ view: ReadingReportBodyContainerView, context: Context) {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .justified
+        paragraph.lineBreakMode = .byWordWrapping
+        paragraph.lineBreakStrategy = [.pushOut]
+        paragraph.minimumLineHeight = ReadingReportLayout.bodyLineHeight
+        paragraph.maximumLineHeight = ReadingReportLayout.bodyLineHeight
+        paragraph.paragraphSpacing = 0
+        paragraph.paragraphSpacingBefore = 0
+        view.textView.attributedText = NSAttributedString(
+            string: normalizedText,
+            attributes: [
+                .font: UIFont.systemFont(ofSize: ReadingReportLayout.bodyFontSize),
+                .foregroundColor: UIColor.label,
+                .paragraphStyle: paragraph
+            ]
+        )
+        view.textView.setNeedsLayout()
+    }
+
+    private var normalizedText: String {
+        text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(
+                of: #"\n[\t ]*\n+"#,
+                with: "\n",
+                options: .regularExpression
+            )
+    }
+}
+
+final class ReadingReportBodyContainerView: UIView, UITextViewDelegate {
+    let textView = ReadingReportBodyTextView(usingTextLayoutManager: false)
+    private let scrollIndicator = UIView()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        clipsToBounds = false
+        textView.delegate = self
+        addSubview(textView)
+
+        scrollIndicator.backgroundColor = UIColor.secondaryLabel.withAlphaComponent(0.55)
+        scrollIndicator.layer.cornerRadius = 1
+        scrollIndicator.isUserInteractionEnabled = false
+        scrollIndicator.isHidden = true
+        scrollIndicator.accessibilityIdentifier = "reading-report-body-scroll-indicator"
+        addSubview(scrollIndicator)
+
+        textView.overflowStateDidChange = { [weak self] _ in
+            self?.updateScrollIndicator()
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { nil }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        textView.frame = bounds
+        updateScrollIndicator()
+    }
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        updateScrollIndicator()
+    }
+
+    private func updateScrollIndicator() {
+        let contentHeight = textView.measuredContentHeight
+        let viewportHeight = bounds.height
+        guard textView.isScrollEnabled,
+              contentHeight > viewportHeight,
+              viewportHeight > 0 else {
+            scrollIndicator.isHidden = true
+            return
+        }
+
+        scrollIndicator.isHidden = false
+        let indicatorHeight = max(24, viewportHeight * viewportHeight / contentHeight)
+        let availableTravel = max(0, viewportHeight - indicatorHeight)
+        let maximumOffset = max(1, contentHeight - viewportHeight)
+        let progress = min(max(textView.contentOffset.y / maximumOffset, 0), 1)
+        scrollIndicator.frame = CGRect(
+            x: bounds.maxX + 4,
+            y: progress * availableTravel,
+            width: 2,
+            height: indicatorHeight
+        )
+    }
+}
+
+final class ReadingReportBodyTextView: UITextView {
+    var overflowStateDidChange: ((Bool) -> Void)?
+    private(set) var measuredContentHeight: CGFloat = 0
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+
+        guard bounds.width > 0, bounds.height > 0 else { return }
+        let laidOutTextHeight = measuredTextHeight(for: bounds.width)
+        measuredContentHeight = laidOutTextHeight
+        let needsScrolling = laidOutTextHeight > bounds.height + 0.5
+
+        if isScrollEnabled != needsScrolling {
+            isScrollEnabled = needsScrolling
+            if !needsScrolling {
+                contentOffset = .zero
+            }
+        }
+        showsVerticalScrollIndicator = false
+        overflowStateDidChange?(needsScrolling)
+    }
+
+    private func measuredTextHeight(for width: CGFloat) -> CGFloat {
+        let sizingContainer = NSTextContainer(
+            size: CGSize(width: width, height: .greatestFiniteMagnitude)
+        )
+        sizingContainer.lineFragmentPadding = textContainer.lineFragmentPadding
+        sizingContainer.lineBreakMode = textContainer.lineBreakMode
+        sizingContainer.maximumNumberOfLines = 0
+
+        let sizingLayoutManager = NSLayoutManager()
+        sizingLayoutManager.addTextContainer(sizingContainer)
+        let sizingStorage = NSTextStorage(attributedString: attributedText ?? NSAttributedString())
+        sizingStorage.addLayoutManager(sizingLayoutManager)
+        sizingLayoutManager.ensureLayout(for: sizingContainer)
+        return ceil(sizingLayoutManager.usedRect(for: sizingContainer).height)
+    }
 }
 
 extension ReaderRoute {

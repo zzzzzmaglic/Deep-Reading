@@ -70,28 +70,39 @@ final class AppRuntime: AppRuntimeBootstrapping, @unchecked Sendable {
     let sessionStore: AppSessionStore
     let articleRepository: SupabaseArticleRepository
     let readingAssetRepository: SupabaseReadingAssetRepository
+    let readingReportGenerator: SupabaseReadingReportGenerator
     let knowledgeRepository: SupabaseKnowledgeBaseRepository
     let readerDependencies: ReaderDependencies?
     let knowledgeDependencies: KnowledgeDependencies?
     private let sessionBootstrap: @Sendable () async throws -> Void
+    private let demoContentBootstrap: @Sendable () async throws -> Void
 
     convenience init(configuration: SupabaseRuntimeConfiguration) {
-        self.init(client: SupabaseClientFactory.makeClient(configuration: configuration))
+        let client = SupabaseClientFactory.makeClient(configuration: configuration)
+        self.init(
+            client: client,
+            demoContentBootstrap: {
+                try await client.rpc("ensure_reading_report_demo_assets").execute()
+            }
+        )
     }
 
     init(
         client: SupabaseClient,
-        sessionBootstrap: (@Sendable () async throws -> Void)? = nil
+        sessionBootstrap: (@Sendable () async throws -> Void)? = nil,
+        demoContentBootstrap: (@Sendable () async throws -> Void)? = nil
     ) {
         self.client = client
         let sessionStore = AppSessionStore(client: client)
         self.sessionStore = sessionStore
         articleRepository = SupabaseArticleRepository(client: client)
         readingAssetRepository = SupabaseReadingAssetRepository(client: client)
+        readingReportGenerator = SupabaseReadingReportGenerator(client: client)
         knowledgeRepository = SupabaseKnowledgeBaseRepository(client: client)
         readerDependencies = ReaderDependencies(
             articleRepository: articleRepository,
-            readingAssetRepository: readingAssetRepository
+            readingAssetRepository: readingAssetRepository,
+            readingReportGenerator: readingReportGenerator
         )
         knowledgeDependencies = KnowledgeDependencies(
             knowledgeRepository: knowledgeRepository,
@@ -100,10 +111,12 @@ final class AppRuntime: AppRuntimeBootstrapping, @unchecked Sendable {
         self.sessionBootstrap = sessionBootstrap ?? { [sessionStore] in
             try await sessionStore.bootstrap()
         }
+        self.demoContentBootstrap = demoContentBootstrap ?? {}
     }
 
     func bootstrap() async throws {
         try await sessionBootstrap()
+        try await demoContentBootstrap()
     }
 }
 
@@ -382,6 +395,7 @@ private struct KnowledgeNavigationContainer: View {
                         onOpenSummary: { route in
                             path.append(.summary(articleID: route.articleID, origin: route.origin))
                         },
+                        onFinishReading: finishReader,
                         assetRefreshRevision: readerAssetRefreshRevision
                     )
                     .toolbar(.hidden, for: .tabBar)
@@ -418,6 +432,11 @@ private struct KnowledgeNavigationContainer: View {
         path.removeLast()
         guard !path.isEmpty else { return }
         path[path.count - 1] = .reader(route)
+    }
+
+    private func finishReader() {
+        guard case .reader = path.last else { return }
+        path.removeLast()
     }
 }
 

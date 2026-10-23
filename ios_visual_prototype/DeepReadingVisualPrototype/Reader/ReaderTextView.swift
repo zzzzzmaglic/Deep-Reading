@@ -113,6 +113,7 @@ struct ReaderTextView: UIViewRepresentable {
     let highlightedAnchorRange: (TextAnchor) -> NSRange?
     let onSelectionAction: (NSRange, ReaderSelectionAction) -> Void
     let onHighlightedTextAction: (TextAnchor, ReaderSelectionAction) -> Void
+    let onCompleteReading: () -> Void
     /// Keep UIKit's native bottom scroll-edge treatment in step with the
     /// reader controls that sit over the same edge.
     let showsBottomEdgeEffect: Bool
@@ -160,10 +161,16 @@ struct ReaderTextView: UIViewRepresentable {
         // geometry whenever the chrome transitions.
         // The 148pt progressive top edge ends above the title. Start the text
         // at 164pt so the visible title never sits under chrome or its mask.
-        textView.textContainerInset = UIEdgeInsets(top: 164, left: 28, bottom: 122, right: 28)
+        textView.textContainerInset = UIEdgeInsets(
+            top: 164,
+            left: 28,
+            bottom: ReaderCompletionControlLayout.textContainerBottomInset,
+            right: 28
+        )
         textView.textContainer.lineFragmentPadding = 0
         textView.delegate = context.coordinator
         textView.accessibilityIdentifier = "reader-text-view"
+        textView.onCompleteReading = onCompleteReading
         textView.addGestureRecognizer(context.coordinator.bodyTapRecognizer)
         // A drag belongs exclusively to UITextView's built-in pan recognizer.
         // A tap is recognized only after that pan has failed, so chrome toggles
@@ -195,6 +202,7 @@ struct ReaderTextView: UIViewRepresentable {
     func updateUIView(_ textView: ReaderViewportTextView, context: Context) {
         textView.bottomEdgeEffect.style = .soft
         textView.bottomEdgeEffect.isHidden = !showsBottomEdgeEffect
+        textView.onCompleteReading = onCompleteReading
         context.coordinator.updateCallbacks(
             onVisibleUTF16Location: onVisibleUTF16Location,
             onScrollDirection: onScrollDirection,
@@ -248,7 +256,19 @@ struct ReaderTextView: UIViewRepresentable {
 
     final class ReaderViewportTextView: UITextView {
         var onViewportLayout: (() -> Void)?
+        var onCompleteReading: (() -> Void)?
+        let completionButton = UIButton(type: .custom)
         private weak var scrollEdgeOwner: UIViewController?
+
+        override init(frame: CGRect, textContainer: NSTextContainer?) {
+            super.init(frame: frame, textContainer: textContainer)
+            configureCompletionButton()
+        }
+
+        required init?(coder: NSCoder) {
+            super.init(coder: coder)
+            configureCompletionButton()
+        }
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
@@ -268,7 +288,33 @@ struct ReaderTextView: UIViewRepresentable {
 
         override func layoutSubviews() {
             super.layoutSubviews()
+            layoutManager.ensureLayout(for: textContainer)
+            let usedTextRect = layoutManager.usedRect(for: textContainer)
+            completionButton.frame = CGRect(
+                x: (bounds.width - ReaderCompletionControlLayout.size) / 2,
+                y: textContainerInset.top + usedTextRect.maxY + ReaderCompletionControlLayout.topSpacing,
+                width: ReaderCompletionControlLayout.size,
+                height: ReaderCompletionControlLayout.size
+            )
+            completionButton.layer.cornerRadius = ReaderCompletionControlLayout.size / 2
             onViewportLayout?()
+        }
+
+        private func configureCompletionButton() {
+            completionButton.backgroundColor = UIColor(white: 0.592, alpha: 0.10)
+            completionButton.layer.borderColor = UIColor(white: 0.731, alpha: 1).cgColor
+            completionButton.layer.borderWidth = 3
+            completionButton.setTitle("✓", for: .normal)
+            completionButton.setTitleColor(UIColor(white: 0.731, alpha: 1), for: .normal)
+            completionButton.titleLabel?.font = .systemFont(ofSize: 36, weight: .medium)
+            completionButton.accessibilityLabel = "完成阅读"
+            completionButton.accessibilityIdentifier = "reader-complete-reading"
+            completionButton.addTarget(self, action: #selector(completeReading), for: .touchUpInside)
+            addSubview(completionButton)
+        }
+
+        @objc private func completeReading() {
+            onCompleteReading?()
         }
 
         private var owningViewController: UIViewController? {
@@ -548,10 +594,14 @@ struct ReaderTextView: UIViewRepresentable {
         }
 
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            if let textView = gestureRecognizer.view as? ReaderViewportTextView,
+               touch.view?.isDescendant(of: textView.completionButton) == true {
+                return false
+            }
             // While a highlighted-asset menu is visible, the system should be
             // allowed to dismiss it on an outside tap without also forwarding
             // that same tap to reader chrome visibility.
-            activeHighlightedAnchor == nil
+            return activeHighlightedAnchor == nil
         }
 
         func editMenuInteraction(
@@ -622,4 +672,12 @@ struct ReaderTextView: UIViewRepresentable {
         }
 
     }
+}
+
+enum ReaderCompletionControlLayout {
+    static let size: CGFloat = 47
+    static let topSpacing: CGFloat = 36
+    /// Keeps the completed-reading control in the scroll document while
+    /// preserving the reader's original 122pt clearance below it.
+    static let textContainerBottomInset: CGFloat = 205
 }
