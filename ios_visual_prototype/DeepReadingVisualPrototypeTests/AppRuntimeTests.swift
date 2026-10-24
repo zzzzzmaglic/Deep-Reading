@@ -314,6 +314,12 @@ final class AppRuntimeTests: XCTestCase {
         ]
 
         XCTAssertEqual(articleIDs.map { ReadingReportMetrics.focusMinutes(for: $0) }, [40, 20, 10, 36])
+        XCTAssertEqual(articleIDs.map { ReadingReportMetrics.headline(for: $0) }, [
+            "从殖民空间，到殖民时间",
+            "好的输入，也要适合自己",
+            "刻意休息，也是创造的一部分",
+            "情商，从理解自己到连接他人"
+        ])
         XCTAssertEqual(ReadingReportLayout.cardFrame, CGRect(x: 38, y: 215, width: 317, height: 381))
         XCTAssertEqual(ReadingReportLayout.bodyFrame, CGRect(x: 21, y: 109, width: 273, height: 208))
         XCTAssertEqual(ReadingReportLayout.finishButtonOffset, CGPoint(x: 137, y: 327))

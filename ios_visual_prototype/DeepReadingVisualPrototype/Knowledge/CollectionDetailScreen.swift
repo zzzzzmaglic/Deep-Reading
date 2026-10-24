@@ -101,15 +101,8 @@ private struct KnowledgeArticleCard: View {
                 VStack(alignment: .leading, spacing: 0) {
                     CollectionArticleTitleLabelView(title: article.title)
                         .frame(width: KnowledgeDetailLayout.collectionTitleTextWidth, height: 42, alignment: .topLeading)
-                        #if DEBUG
-                        .overlay {
-                            Rectangle()
-                                .strokeBorder(.cyan, lineWidth: 1)
-                                .allowsHitTesting(false)
-                                .accessibilityIdentifier("collection-article-title-container")
-                                .accessibilityLabel("文章标题文本框")
-                        }
-                        #endif
+                        .accessibilityIdentifier("collection-article-title-container")
+                        .accessibilityLabel("文章标题文本框")
                         .padding(.top, 5)
                     metadata
                         .padding(.top, 14)

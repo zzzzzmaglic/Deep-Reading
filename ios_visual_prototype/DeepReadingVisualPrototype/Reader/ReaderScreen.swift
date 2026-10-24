@@ -361,6 +361,7 @@ enum ReadingReportBodyState: Equatable {
 
 struct ReadingReportPresentation: Identifiable, Equatable {
     let articleID: UUID
+    let headline: String
     let focusMinutes: Int
     let assetCount: Int
     let conversationCount: Int
@@ -374,6 +375,7 @@ struct ReadingReportPresentation: Identifiable, Equatable {
         bodyState: ReadingReportBodyState = .loading
     ) {
         self.articleID = articleID
+        headline = ReadingReportMetrics.headline(for: articleID)
         focusMinutes = ReadingReportMetrics.focusMinutes(for: articleID)
         self.assetCount = min(max(assetCount, 0), 99)
         conversationCount = 10
@@ -390,6 +392,13 @@ struct ReadingReportPresentation: Identifiable, Equatable {
 }
 
 enum ReadingReportMetrics {
+    private static let fixedHeadlines: [UUID: String] = [
+        UUID(uuidString: "10000000-0000-0000-0000-000000000001")!: "从殖民空间，到殖民时间",
+        UUID(uuidString: "10000000-0000-0000-0000-000000000004")!: "好的输入，也要适合自己",
+        UUID(uuidString: "10000000-0000-0000-0000-000000000005")!: "刻意休息，也是创造的一部分",
+        UUID(uuidString: "10000000-0000-0000-0000-000000000006")!: "情商，从理解自己到连接他人"
+    ]
+
     private static let fixedFocusMinutes: [UUID: Int] = [
         UUID(uuidString: "10000000-0000-0000-0000-000000000001")!: 40,
         UUID(uuidString: "10000000-0000-0000-0000-000000000004")!: 20,
@@ -399,6 +408,10 @@ enum ReadingReportMetrics {
 
     static func focusMinutes(for articleID: UUID) -> Int {
         fixedFocusMinutes[articleID] ?? 0
+    }
+
+    static func headline(for articleID: UUID) -> String {
+        fixedHeadlines[articleID] ?? "从殖民空间，到殖民时间"
     }
 }
 
@@ -458,7 +471,7 @@ private struct ReadingReportOverlay: View {
             .frame(width: 82)
             .position(x: 254, y: 45)
 
-            Text("“从殖民空间，到殖民时间”")
+            Text("“\(presentation.headline)”")
                 .font(.system(size: 16, weight: .bold))
                 .lineLimit(1)
                 .frame(width: 273, height: 21, alignment: .leading)
@@ -478,10 +491,6 @@ private struct ReadingReportOverlay: View {
                 width: ReadingReportLayout.bodyFrame.width,
                 height: ReadingReportLayout.bodyFrame.height
             )
-            .overlay {
-                Rectangle()
-                    .stroke(Color.blue, lineWidth: 1)
-            }
             .offset(
                 x: ReadingReportLayout.bodyFrame.minX,
                 y: ReadingReportLayout.bodyFrame.minY
