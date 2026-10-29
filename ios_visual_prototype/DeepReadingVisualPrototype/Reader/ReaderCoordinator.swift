@@ -6,17 +6,22 @@ struct ReaderDependencies: @unchecked Sendable {
     let readingAssetRepository: any ReadingAssetRepository
     let readingReportGenerator: any ReadingReportGenerating
     let aiCompanionRepository: any AICompanionStreaming
+    /// Showcase builds open normal article routes at the first block.
+    /// Test fixtures retain progress restoration by default.
+    let startsNormalRoutesAtBeginning: Bool
 
     init(
         articleRepository: any ArticleRepository,
         readingAssetRepository: any ReadingAssetRepository,
         readingReportGenerator: any ReadingReportGenerating = UnavailableReadingReportGenerator(),
-        aiCompanionRepository: any AICompanionStreaming = UnavailableAICompanionRepository()
+        aiCompanionRepository: any AICompanionStreaming = UnavailableAICompanionRepository(),
+        startsNormalRoutesAtBeginning: Bool = false
     ) {
         self.articleRepository = articleRepository
         self.readingAssetRepository = readingAssetRepository
         self.readingReportGenerator = readingReportGenerator
         self.aiCompanionRepository = aiCompanionRepository
+        self.startsNormalRoutesAtBeginning = startsNormalRoutesAtBeginning
     }
 }
 
@@ -146,8 +151,10 @@ final class ReaderCoordinator: ObservableObject {
             guard isCurrentLoad(generation) else { return }
 
             guard let anchorID = route.anchorID else {
-                // A normal reader route renders restored progress before assets finish.
-                publishInitialPosition(persistedProgress)
+                let startingPosition = dependencies.startsNormalRoutesAtBeginning
+                    ? article.blocks.first.map { ReaderPosition(blockID: $0.id, utf16Offset: 0) }
+                    : persistedProgress
+                publishInitialPosition(startingPosition)
                 loadAssets(articleID: route.articleID, generation: generation)
                 return
             }

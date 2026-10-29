@@ -2,7 +2,37 @@ name: Check
 
 on: [pull_request, push]
 
+permissions:
+  contents: read
+
 jobs:
+  native-ios-build:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the native demo without live credentials
+        run: |
+          xcodebuild -version
+          xcodebuild -project ios_visual_prototype/DeepReadingVisualPrototype.xcodeproj \
+            -scheme DeepReadingVisualPrototype -configuration Release \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/native-ci \
+            SUPABASE_URL=http://127.0.0.1:54321 \
+            SUPABASE_ANON_KEY=ci-build-only CODE_SIGNING_ALLOWED=NO build
+
+  edge-function-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Test AI context and report pipeline without model requests
+        run: |
+          deno test supabase/functions/ai-companion/context_test.ts
+          deno test supabase/functions/reading-report/logic_test.ts supabase/functions/reading-report/pipeline_test.ts supabase/functions/reading-report/index_test.ts
+
   flutter:
     runs-on: ubuntu-latest
     defaults:

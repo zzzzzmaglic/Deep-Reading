@@ -28,6 +28,26 @@ enum KnowledgeVisualTokens {
     static let tabBarIconSize: CGFloat = 22
 }
 
+enum ReadingFeedLayout {
+    static let sectionTitleWidth: CGFloat = 86
+    static let sectionTitleHeight: CGFloat = 27
+    static let dailyTitleTopInset: CGFloat = 9
+    static let dailyTitleBottomSpacing: CGFloat = 12
+    static let cardWidth: CGFloat = 371
+    static let dailyCardHeight: CGFloat = 210
+    static let cognitiveRoamingHeight: CGFloat = 200
+    static let cardCornerRadius: CGFloat = 15
+    static let coverWidth: CGFloat = 74
+    static let coverHeight: CGFloat = 78
+    static let coverCornerRadius: CGFloat = 12
+    static let titleWidth: CGFloat = KnowledgeDetailLayout.collectionTitleTextWidth
+    static let introductionWidth: CGFloat = 347
+    static let introductionHeight: CGFloat = 82
+    static let pageDotDiameter: CGFloat = 8
+    static let pageDotSpacing: CGFloat = 8
+    static let articleCount = 4
+}
+
 enum KnowledgeHomeHeader: String {
     case collections
     case tags

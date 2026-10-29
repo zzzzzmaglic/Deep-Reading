@@ -3,6 +3,41 @@ import XCTest
 final class KnowledgeBaseFlowUITests: XCTestCase {
     private var app: XCUIApplication!
 
+    func testReadingFeedPagesAndOpensSelectedArticle() throws {
+        app = XCUIApplication()
+        app.terminate()
+        app.launchArguments.append("-ui-test-open-reading-feed")
+        app.launch()
+        if app.otherElements["app-root-configuration-error"].waitForExistence(timeout: 3) {
+            throw XCTSkip("Local Supabase configuration was not supplied to the built app.")
+        }
+
+        let firstArticle = app.buttons["1600-2100年的公司简史"]
+        XCTAssertTrue(firstArticle.waitForExistence(timeout: 12))
+        XCTAssertTrue(app.staticTexts["每日推文"].waitForExistence(timeout: 4))
+
+        let pageControl = app.descendants(matching: .any)["reading-feed-page-control"]
+        XCTAssertTrue(pageControl.waitForExistence(timeout: 4))
+        XCTAssertEqual(pageControl.label, "第 1 页，共 4 页")
+
+        let swipeStart = app.coordinate(withNormalizedOffset: CGVector(dx: 0.84, dy: 0.31))
+        let swipeEnd = app.coordinate(withNormalizedOffset: CGVector(dx: 0.16, dy: 0.31))
+        swipeStart.press(forDuration: 0.05, thenDragTo: swipeEnd)
+
+        expectation(
+            for: NSPredicate(format: "label == %@", "第 2 页，共 4 页"),
+            evaluatedWith: pageControl
+        )
+        waitForExpectations(timeout: 4)
+
+        let secondArticle = app.buttons["为你的大脑收集训练数据"]
+        XCTAssertTrue(secondArticle.waitForExistence(timeout: 4))
+        XCTAssertTrue(secondArticle.isHittable)
+        secondArticle.tap()
+
+        XCTAssertTrue(app.textViews["reader-text-view"].waitForExistence(timeout: 8))
+    }
+
     func testKnowledgeHomeScrollRevealsItsCompactTitle() throws {
         app = XCUIApplication()
         app.terminate()

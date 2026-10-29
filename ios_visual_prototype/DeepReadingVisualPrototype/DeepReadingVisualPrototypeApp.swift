@@ -105,7 +105,8 @@ final class AppRuntime: AppRuntimeBootstrapping, @unchecked Sendable {
             articleRepository: articleRepository,
             readingAssetRepository: readingAssetRepository,
             readingReportGenerator: readingReportGenerator,
-            aiCompanionRepository: aiCompanionRepository
+            aiCompanionRepository: aiCompanionRepository,
+            startsNormalRoutesAtBeginning: true
         )
         knowledgeDependencies = KnowledgeDependencies(
             knowledgeRepository: knowledgeRepository,
@@ -146,6 +147,18 @@ enum AppTab: String, CaseIterable, Hashable, Sendable, TabItem {
         case .home: return "house"
         case .knowledge: return "books.vertical"
         }
+    }
+}
+
+enum AppTabLaunchPolicy {
+    static let uiTestOpenReadingFeedArgument = "-ui-test-open-reading-feed"
+
+    static func initialSelection(arguments: [String]) -> AppTab {
+        #if DEBUG
+        arguments.contains(uiTestOpenReadingFeedArgument) ? .home : AppTab.defaultSelection
+        #else
+        AppTab.defaultSelection
+        #endif
     }
 }
 
@@ -195,7 +208,9 @@ struct AppRootView: View {
     private let originDismissal: ReaderOriginDismissal
     @State private var screen = AppRootScreen.loading
     @State private var runtime: (any AppRuntimeBootstrapping)?
-    @State private var selectedTab = AppTab.defaultSelection
+    @State private var selectedTab = AppTabLaunchPolicy.initialSelection(
+        arguments: ProcessInfo.processInfo.arguments
+    )
     @State private var hidesCustomTabBar = false
     @State private var tabBarBottomInset: CGFloat = 0
 
@@ -270,7 +285,10 @@ struct AppRootView: View {
             case .ready:
                 if let dependencies = runtime?.knowledgeDependencies {
                     TabView(selection: $selectedTab) {
-                        HomeUnavailableScreen()
+                        ReadingFeedNavigationContainer(
+                            dependencies: dependencies,
+                            hidesCustomTabBar: $hidesCustomTabBar
+                        )
                             .tag(AppTab.home)
                             .toolbarVisibility(.hidden, for: .tabBar)
                         KnowledgeNavigationContainer(
@@ -281,7 +299,7 @@ struct AppRootView: View {
                         .toolbarVisibility(.hidden, for: .tabBar)
                     }
                     .safeAreaBar(edge: .bottom, spacing: 0) {
-                        if selectedTab == .home || !hidesCustomTabBar {
+                        if !hidesCustomTabBar {
                             KnowledgeGlassTabBar(selection: $selectedTab)
                                 .ignoresSafeArea()
                                 .padding(.leading, KnowledgeVisualTokens.tabBarLeadingInset)
@@ -337,15 +355,73 @@ struct AppRootView: View {
     }
 }
 
-private struct HomeUnavailableScreen: View {
-    var body: some View {
-        ZStack {
-            KnowledgeVisualTokens.background
-                .ignoresSafeArea()
+private struct ReadingFeedNavigationContainer: View {
+    let dependencies: KnowledgeDependencies
+    @Binding var hidesCustomTabBar: Bool
+    @State private var path: [KnowledgeNavigationDestination] = []
+    @State private var readerAssetRefreshRevision = 0
 
-            ContentUnavailableView("阅读流尚未实现", systemImage: "house")
-                .accessibilityIdentifier("knowledge-home-placeholder")
+    var body: some View {
+        NavigationStack(path: $path) {
+            ReadingFeedScreen(repository: dependencies.knowledgeRepository) { article in
+                path.append(
+                    .reader(
+                        ReaderRoute(articleID: article.id, anchorID: nil, origin: .feed)
+                    )
+                )
+            }
+            .navigationDestination(for: KnowledgeNavigationDestination.self) { destination in
+                switch destination {
+                case let .reader(route):
+                    ReaderScreen(
+                        route: route,
+                        dependencies: dependencies.readerDependencies,
+                        onOpenSummary: { route in
+                            path.append(.summary(articleID: route.articleID, origin: route.origin))
+                        },
+                        onFinishReading: finishReader,
+                        assetRefreshRevision: readerAssetRefreshRevision
+                    )
+                    .toolbar(.hidden, for: .tabBar)
+                case let .summary(articleID, origin):
+                    ArticleAssetSummaryScreen(
+                        articleID: articleID,
+                        origin: origin,
+                        dependencies: dependencies.readerDependencies,
+                        showInArticle: replaceReaderAfterDismissingSummary,
+                        refreshReaderAssets: { readerAssetRefreshRevision += 1 }
+                    )
+                    .toolbar(.hidden, for: .tabBar)
+                case .collection, .tag:
+                    EmptyView()
+                }
+            }
+            .onAppear(perform: updateCustomTabBarVisibility)
+            .onChange(of: path) { _, _ in updateCustomTabBarVisibility() }
         }
+    }
+
+    private func updateCustomTabBarVisibility() {
+        hidesCustomTabBar = path.contains { destination in
+            switch destination {
+            case .reader, .summary:
+                true
+            case .collection, .tag:
+                false
+            }
+        }
+    }
+
+    private func replaceReaderAfterDismissingSummary(with route: ReaderRoute) {
+        guard case .summary = path.last else { return }
+        path.removeLast()
+        guard !path.isEmpty else { return }
+        path[path.count - 1] = .reader(route)
+    }
+
+    private func finishReader() {
+        guard case .reader = path.last else { return }
+        path.removeLast()
     }
 }
 

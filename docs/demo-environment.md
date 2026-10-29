@@ -6,6 +6,20 @@ The Demo uses Supabase anonymous users and accepts AI requests only when Supabas
 `is_anonymous = true`. Local anonymous sign-ins are enabled in `supabase/config.toml`. Enable the
 same project setting in every hosted Demo environment.
 
+### Appetize simulator session storage
+
+Unsigned Release simulator builds use `DemoSessionMemoryStorage` through
+`SupabaseClientFactory`. Appetize-compatible unsigned builds cannot rely on Keychain
+entitlements: the SDK can return a successful anonymous sign-in while its session
+write fails with OSStatus `-34018`, leaving subsequent RPCs without a user token.
+The in-memory store preserves and refreshes Auth tokens for the lifetime of that
+client, without writing credentials to disk. A new app process starts a new anonymous
+trial. Signed local Debug builds and physical-device builds continue using Keychain.
+
+`AppSessionStore` also checks that the SDK can retrieve the newly established session
+before allowing data initialization. A successful HTTP sign-in response by itself is
+not sufficient evidence that later SDK requests will be authenticated.
+
 Anonymous sign-in is not sufficient abuse protection on its own. Configure Supabase Auth CAPTCHA
 with Cloudflare Turnstile (or another supported CAPTCHA provider) for the public Demo, keep the Auth
 anonymous-user IP rate limit enabled, and verify the challenge on anonymous sign-in. The durable AI
@@ -47,6 +61,10 @@ messages. Selection and existing-highlight explanations require both a quote and
 microphone icon is visual only and the Demo neither requests microphone permission nor performs
 speech recognition. Dynamic recommended questions are intentionally outside the current Demo
 scope.
+
+For showcase builds, a normal article route intentionally opens at the first article block rather
+than restoring a previous reading position. This keeps every Appetize trial consistent; routes
+that explicitly carry an asset anchor still open at that anchor.
 
 ### Reading report function
 

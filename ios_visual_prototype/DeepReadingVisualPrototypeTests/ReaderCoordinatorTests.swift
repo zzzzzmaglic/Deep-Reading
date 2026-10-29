@@ -3,6 +3,31 @@ import XCTest
 
 @MainActor
 final class ReaderCoordinatorTests: XCTestCase {
+    func testShowcaseNormalRouteStartsAtFirstBlockInsteadOfPersistedProgress() async throws {
+        let articleID = UUID()
+        let firstBlockID = UUID()
+        let secondBlockID = UUID()
+        let article = Article(
+            id: articleID, title: "标题", sourceName: "来源", contentChecksum: "checksum",
+            blocks: [
+                ArticleBlock(id: firstBlockID, articleID: articleID, position: 0, content: "第一段", kind: .paragraph),
+                ArticleBlock(id: secondBlockID, articleID: articleID, position: 1, content: "第二段", kind: .paragraph),
+            ]
+        )
+        let coordinator = ReaderCoordinator(dependencies: ReaderDependencies(
+            articleRepository: ReaderTestArticleRepository(
+                article: article,
+                progress: ReaderPosition(blockID: secondBlockID, utf16Offset: 3)
+            ),
+            readingAssetRepository: ReaderTestAssetRepository(),
+            startsNormalRoutesAtBeginning: true
+        ))
+
+        try await coordinator.load(route: ReaderRoute(articleID: articleID, anchorID: nil, origin: .feed))
+
+        XCTAssertEqual(coordinator.initialPosition, ReaderPosition(blockID: firstBlockID, utf16Offset: 0))
+    }
+
     func testProgressWritesOnceAfter350Milliseconds() async throws {
         let articleID = UUID()
         let firstBlockID = UUID()

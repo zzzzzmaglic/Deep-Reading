@@ -105,6 +105,58 @@ final class KnowledgeHomeCoordinatorTests: XCTestCase {
         XCTAssertEqual(KnowledgeDetailLayout.collectionTitleTextWidth, 224)
     }
 
+    func testReadingFeedLoadsTheSystemCollectionInItsExistingArticleOrder() async {
+        let archive = collection(name: "往期推文", isSystem: true)
+        let expected = [
+            article(title: "第一篇"),
+            article(title: "第二篇"),
+            article(title: "第三篇"),
+            article(title: "第四篇"),
+        ]
+        let repository = HomeTestKnowledgeRepository(
+            snapshot: .init(collections: [collection(name: "普通合集"), archive], tags: []),
+            articles: expected
+        )
+        let coordinator = ReadingFeedCoordinator(repository: repository)
+
+        await coordinator.load()
+
+        XCTAssertEqual(coordinator.articles.map(\.title), expected.map(\.title))
+        XCTAssertEqual(coordinator.selectedPage, 0)
+        XCTAssertNil(coordinator.failure)
+    }
+
+    func testReadingFeedUsesFigma28CardAndFourDotGeometry() {
+        XCTAssertEqual(ReadingFeedLayout.sectionTitleWidth, 86)
+        XCTAssertEqual(ReadingFeedLayout.sectionTitleHeight, 27)
+        XCTAssertEqual(ReadingFeedLayout.dailyTitleTopInset, 9)
+        XCTAssertEqual(ReadingFeedLayout.dailyTitleBottomSpacing, 12)
+        XCTAssertEqual(ReadingFeedLayout.cardWidth, 371)
+        XCTAssertEqual(
+            ReadingFeedLayout.titleWidth,
+            KnowledgeDetailLayout.collectionTitleTextWidth
+        )
+        XCTAssertEqual(ReadingFeedLayout.dailyCardHeight, 210)
+        XCTAssertEqual(ReadingFeedLayout.cognitiveRoamingHeight, 200)
+        XCTAssertEqual(ReadingFeedLayout.introductionWidth, 347)
+        XCTAssertEqual(ReadingFeedLayout.introductionHeight, 82)
+        XCTAssertEqual(ReadingFeedLayout.pageDotDiameter, 8)
+        XCTAssertEqual(ReadingFeedLayout.pageDotSpacing, 8)
+        XCTAssertEqual(ReadingFeedLayout.articleCount, 4)
+    }
+
+    func testReadingFeedProvidesIntroductionsForAllFourDemoArticles() {
+        let titles = [
+            "1600-2100年的公司简史",
+            "为你的大脑收集训练数据",
+            "达尔文是个“懒虫”，你也应该如此",
+            "当我们在聊情商时，到底在聊什么？",
+        ]
+
+        XCTAssertTrue(titles.allSatisfy { !ReadingFeedArticleIntroduction.text(for: $0).isEmpty })
+        XCTAssertEqual(ReadingFeedArticleIntroduction.text(for: "未知文章"), "")
+    }
+
     func testTabBarABVariantRequiresAnExplicitDiagnosticArgument() {
         XCTAssertEqual(
             TabBarABVariant.from(arguments: ["-tab-bar-ab-upstream"]),
@@ -138,6 +190,18 @@ final class KnowledgeHomeCoordinatorTests: XCTestCase {
         Tag(id: UUID(), ownerID: UUID(), name: name, isSystem: isSystem)
     }
 
+    private func article(title: String) -> KnowledgeArticlePreview {
+        KnowledgeArticlePreview(
+            id: UUID(),
+            title: title,
+            sourceName: "每日推文",
+            coverAssetName: "KnowledgeCover1",
+            cognitiveDimension: "方法论",
+            publishedAt: Date(timeIntervalSince1970: 0),
+            readingAssetCount: 0
+        )
+    }
+
     private func date(_ year: Int, _ month: Int, _ day: Int, _ hour: Int, _ minute: Int, calendar: Calendar) -> Date {
         calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
     }
@@ -145,12 +209,16 @@ final class KnowledgeHomeCoordinatorTests: XCTestCase {
 
 private actor HomeTestKnowledgeRepository: KnowledgeBaseRepository {
     let snapshot: KnowledgeHomeSnapshot
+    let articles: [KnowledgeArticlePreview]
 
-    init(snapshot: KnowledgeHomeSnapshot) { self.snapshot = snapshot }
+    init(snapshot: KnowledgeHomeSnapshot, articles: [KnowledgeArticlePreview] = []) {
+        self.snapshot = snapshot
+        self.articles = articles
+    }
 
     func readHome() async throws -> KnowledgeHomeSnapshot { snapshot }
     func readCollection(id: UUID) async throws -> KnowledgeCollection { throw CancellationError() }
-    func readCollectionArticles(collectionID: UUID) async throws -> [KnowledgeArticlePreview] { [] }
+    func readCollectionArticles(collectionID: UUID) async throws -> [KnowledgeArticlePreview] { articles }
     func readArticleTitles(ids: Set<UUID>) async throws -> [UUID: String] { [:] }
     func removeArticlesFromCollection(collectionID: UUID, articleIDs: [UUID]) async throws {}
 }

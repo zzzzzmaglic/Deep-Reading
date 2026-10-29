@@ -297,6 +297,14 @@ final class AppRuntimeTests: XCTestCase {
         XCTAssertEqual(AppTab.defaultSelection, .knowledge)
     }
 
+    func testExplicitUITestArgumentOpensReadingFeedWithoutChangingReleaseDefault() {
+        XCTAssertEqual(AppTabLaunchPolicy.initialSelection(arguments: []), .knowledge)
+        XCTAssertEqual(
+            AppTabLaunchPolicy.initialSelection(arguments: ["-ui-test-open-reading-feed"]),
+            .home
+        )
+    }
+
     func testOnlyTheExplicitUITestArgumentSeedsTheKnowledgeReader() {
         XCTAssertEqual(KnowledgeNavigationInitialPath.destinations(arguments: []), [])
         XCTAssertEqual(

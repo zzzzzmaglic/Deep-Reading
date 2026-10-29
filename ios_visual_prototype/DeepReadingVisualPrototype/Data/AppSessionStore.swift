@@ -67,10 +67,16 @@ final class AppSessionStore: SessionAuthenticating, @unchecked Sendable {
             return
         }
 
-        // The freshly returned sign-in result is direct authentication evidence. It is
-        // deliberately distinct from `currentSession()`, which may lag while the SDK's
-        // secure persistence finishes writing.
-        return
+        // A successful sign-in response alone is insufficient: the SDK must be
+        // able to retrieve the session to authorize subsequent database requests.
+        // Fail here if storage is unavailable instead of continuing without Auth.
+        if let restoredSession = try? await remote.restoreSession(),
+           restoredSession.isUsableAnonymousSession,
+           remote.currentSession()?.isUsableAnonymousSession == true {
+            return
+        }
+
+        throw AppSessionStoreError.unavailableAnonymousSession
     }
 
     func ensureSession() async throws {

@@ -46,15 +46,15 @@ final class AppSessionStoreTests: XCTestCase {
         XCTAssertEqual(remote.currentSession()?.isUsableAnonymousSession, true)
     }
 
-    func testBootstrapAcceptsFreshAnonymousSignInWhenSDKSessionIsTemporarilyUnavailable() async throws {
+    func testBootstrapRejectsFreshAnonymousSignInWhenSDKSessionCannotBeRestored() async {
         let remote = FakeAppSessionRemote(cachedSession: nil)
         remote.signInUpdatesCurrentSession = false
         remote.restoreError = FakeSessionError.restoreFailed
 
-        try await AppSessionStore(remote: remote).bootstrap()
+        await assertUnavailableAnonymousSession(remote)
 
         XCTAssertEqual(remote.signInCalls, 1)
-        XCTAssertEqual(remote.restoreCalls, 0)
+        XCTAssertEqual(remote.restoreCalls, 1)
         XCTAssertNil(remote.currentSession())
     }
 
