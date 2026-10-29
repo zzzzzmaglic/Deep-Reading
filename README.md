@@ -8,6 +8,8 @@
 
 **SwiftUI / UIKit · Supabase · DeepSeek Flash**
 
+[产品需求文档（PRD）](PRD.md)
+
 <p>
   <img src="docs/media/showcase-01.png" width="220" alt="知识库首页">
   <img src="docs/media/showcase-02.png" width="220" alt="关联型笔记资产卡片">

@@ -3,6 +3,13 @@
 ### GitHub 展示维护 -> 项目集成与决策
 
 - 日期：2026-10-29
+- 已完成：按用户明确要求，将其上传的新版 `PRD.md` 原样替换仓库根目录旧版，README 增加产品需求文档入口。
+- 验证：替换后文件与用户提供的文件逐字节一致；9 个 Markdown 配图引用均对应仓库内已有受版本控制的文件；`git diff --check` 通过。
+- 范围：文档公开同步，不据此自动修改应用功能、实现范围或 `PROJECT_STATE.md` 中的决策状态。
+
+### GitHub 展示维护 -> 项目集成与决策
+
+- 日期：2026-10-29
 - 已完成：按用户确认将公开仓库 `zzzzzmaglic/Private-Tick-Up` 改名为 `zzzzzmaglic/Deep-Reading`，本地主工作区 origin 同步为新 SSH 地址。
 - 展示调整：原有 `docs/media/demo.mp4` 上传为 GitHub 视频附件，README 使用附件 URL 内嵌播放器；六张截图、排列、其他文案和视频文件内容保持不变。
 - 视频附件：`https://github.com/user-attachments/assets/9baaaef5-bee8-4b6c-85e1-0c8107bdf5e6`。
