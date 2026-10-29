@@ -114,6 +114,13 @@
 
 ## 当前交接
 
+### GitHub 发布 -> 已公开
+
+- 日期：2026-10-29
+- 已完成：现有仓库 `zzzzzmaglic/Private-Tick-Up` 已公开，匿名 GitHub API 确认 `private=false`、默认分支 `main`、许可证 MIT；简介与六个技术主题标签已保存。README、六张新截图与 1 分 5 秒视频均已上传。
+- 提交：`7c084a1` 存档展示版本；`dbe4653` 合并 main 的早期文档历史，已推送 main 与 feature/first-core-user-path，没有强制推送。冲突处理中保留当前 PRD 图片路径和较新阶段说明，保留历史交接与早期决策。
+- 验证：GitHub Actions 的原生 iOS 构建成功；Flutter 静态检查和 Edge Function 测试失败，尚未修复，不能声称全套 CI 通过。对应运行：`https://github.com/zzzzzmaglic/Private-Tick-Up/actions/runs/40821714794`。
+
 ### GitHub 发布 -> MIT 与现有仓库公开
 
 - 日期：2026-10-29
