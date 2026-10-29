@@ -55,3 +55,4 @@ supabase/.env.local
 supabase/.branches/
 supabase/.temp/
 supabase/.debug/
+# PRD prototype images are tracked source assets under assets/images/
