@@ -1,5 +1,13 @@
 # 跨 Session 交接日志
 
+### GitHub 展示维护 -> 项目集成与决策
+
+- 日期：2026-10-29
+- 已完成：按用户确认将公开仓库 `zzzzzmaglic/Private-Tick-Up` 改名为 `zzzzzmaglic/Deep-Reading`，本地主工作区 origin 同步为新 SSH 地址。
+- 展示调整：原有 `docs/media/demo.mp4` 上传为 GitHub 视频附件，README 使用附件 URL 内嵌播放器；六张截图、排列、其他文案和视频文件内容保持不变。
+- 视频附件：`https://github.com/user-attachments/assets/9baaaef5-bee8-4b6c-85e1-0c8107bdf5e6`。
+- 范围：仅仓库元数据与展示文档，不修改应用代码或后端。
+
 ### 开发实现 -> 项目集成与决策
 
 - 日期：2026-08-09

@@ -19,7 +19,9 @@
   <img src="docs/media/showcase-06.png" width="220" alt="阅读报告：从殖民空间，到殖民时间">
 </p>
 
-**[▶ 观看操作演示 · 1 分 5 秒](docs/media/demo.mp4)**
+**操作演示 · 1 分 5 秒**
+
+https://github.com/user-attachments/assets/9baaaef5-bee8-4b6c-85e1-0c8107bdf5e6
 
 ## 核心功能模块
 
