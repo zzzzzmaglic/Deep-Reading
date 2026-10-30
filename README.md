@@ -11,14 +11,14 @@
 [产品需求文档（PRD）](PRD.md)
 
 <p>
-  <img src="docs/media/showcase-01.png" width="220" alt="知识库首页">
-  <img src="docs/media/showcase-02.png" width="220" alt="关联型笔记资产卡片">
-  <img src="docs/media/showcase-03.png" width="220" alt="携带原文引用的 AI 伴读">
+  <img src="docs/media/showcase-01.png" width="220" height="477" alt="知识库首页">
+  <img src="docs/media/showcase-02.png" width="220" height="477" alt="关联型笔记资产卡片">
+  <img src="docs/media/showcase-03.png" width="220" height="477" alt="携带原文引用的 AI 伴读">
 </p>
 <p>
-  <img src="docs/media/showcase-04.png" width="220" alt="阅读报告：情商，从理解自己到连接他人">
-  <img src="docs/media/showcase-05.png" width="220" alt="阅读报告：好的输入，也要适合自己">
-  <img src="docs/media/showcase-06.png" width="220" alt="阅读报告：从殖民空间，到殖民时间">
+  <img src="docs/media/showcase-04.png" width="220" height="477" alt="阅读报告：情商，从理解自己到连接他人">
+  <img src="docs/media/showcase-05.png" width="220" height="477" alt="阅读报告：好的输入，也要适合自己">
+  <img src="docs/media/showcase-06.png" width="220" height="477" alt="阅读报告：从殖民空间，到殖民时间">
 </p>
 
 **操作演示 · 1 分 5 秒**
